@@ -137,10 +137,10 @@ TFTView_320x240 *TFTView_320x240::instance(const DisplayDriverConfig &cfg)
 
 TFTView_320x240::TFTView_320x240(const DisplayDriverConfig *cfg, DisplayDriver *driver)
     : MeshtasticView(cfg, driver, new ViewController), screensInitialised(false), nodesFiltered(0), nodesChanged(true),
-      processingFilter(false), packetLogEnabled(false), detectorRunning(false), cardDetected(false), formatSD(false),
-      packetCounter(0), actTime(0), uptime(0), lastHeard(0), hasPosition(false), myLatitude(0), myLongitude(0),
-      topNodeLL(nullptr), scans(0), selectedHops(0), chooseNodeSignalScanner(false), chooseNodeTraceRoute(false), qr(nullptr),
-      db{}
+      processingFilter(false), nodesScrollDisplayLimit(50), nodesScrollLoadingMore(false), packetLogEnabled(false),
+      detectorRunning(false), cardDetected(false), formatSD(false), packetCounter(0), actTime(0), uptime(0), lastHeard(0),
+      hasPosition(false), myLatitude(0), myLongitude(0), topNodeLL(nullptr), scans(0), selectedHops(0),
+      chooseNodeSignalScanner(false), chooseNodeTraceRoute(false), qr(nullptr), db{}
 {
     filter.active = false;
     highlight.active = false;
@@ -728,6 +728,9 @@ void TFTView_320x240::ui_events_init(void)
 
     // node and channel buttons
     lv_obj_add_event_cb(objects.node_button, ui_event_NodeButton, LV_EVENT_ALL, (void *)ownNode);
+
+    // nodes panel - infinite scroll support
+    lv_obj_add_event_cb(objects.nodes_panel, this->ui_event_nodesPanelScroll, LV_EVENT_SCROLL, NULL);
 
     // 8 channel buttons
     lv_obj_add_event_cb(objects.channel_button0, ui_event_ChannelButton, LV_EVENT_ALL, (void *)0);
@@ -2376,6 +2379,67 @@ void TFTView_320x240::ui_event_positionButton(lv_event_t *e)
             THIS->loadMap();
         }
         THIS->map->setScrolledPosition(lat * 1e-7, lon * 1e-7);
+    }
+}
+
+/**
+ * @brief Infinite scroll handler for nodes panel
+ * Loads additional nodes progressively as user scrolls to 75-80% of scrollable content
+ * Batch loads 10 nodes at a time to maintain smooth performance
+ */
+void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
+{
+    lv_event_code_t event_code = lv_event_get_code(e);
+
+    // Only process scroll events
+    if (event_code != LV_EVENT_SCROLL) {
+        return;
+    }
+
+    lv_obj_t *panel = (lv_obj_t *)e->target;
+
+    // Get current scroll position
+    lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
+
+    // Get panel dimensions
+    lv_coord_t panel_height = lv_obj_get_height(panel);
+
+    // Calculate scrollable content height
+    lv_coord_t content_height = lv_obj_get_scroll_bottom(panel);
+    lv_coord_t scrollable_height = content_height - panel_height;
+
+    if (scrollable_height <= 0) {
+        return; // Not scrollable
+    }
+
+    // Check if we've scrolled to 75% of scrollable content
+    float scroll_ratio = (float)scroll_y / scrollable_height;
+    const float SCROLL_THRESHOLD = 0.75f;
+
+    // Prevent concurrent load requests and check threshold
+    if (scroll_ratio >= SCROLL_THRESHOLD && !THIS->nodesScrollLoadingMore) {
+        // Prevent multiple load requests
+        THIS->nodesScrollLoadingMore = true;
+
+        // Increment display limit by 10 nodes, cap at MAX_NUM_NODES_VIEW
+        uint16_t new_limit = THIS->nodesScrollDisplayLimit + 10;
+        if (new_limit > MAX_NUM_NODES_VIEW) {
+            new_limit = MAX_NUM_NODES_VIEW;
+        }
+
+        // Only trigger update if the limit actually changed
+        if (new_limit > THIS->nodesScrollDisplayLimit) {
+            THIS->nodesScrollDisplayLimit = new_limit;
+
+            ILOG_DEBUG("Infinite scroll triggered: displaying %d nodes", THIS->nodesScrollDisplayLimit);
+
+            // Trigger the node filtering update with new limit
+            THIS->updateNodesFiltered(false);
+            THIS->updateNodesStatus();
+        }
+
+        // Allow next load after a brief delay
+        THIS->nodesScrollLoadingMore = false;
     }
 }
 
@@ -7038,19 +7102,27 @@ void TFTView_320x240::updateNodesStatus(void)
 void TFTView_320x240::updateNodesFiltered(bool reset)
 {
     static auto it = nodes.begin();
+    static uint16_t processedCount = 0; // Track how many nodes we've processed in current session
+
     if (reset || nodesChanged) {
         nodesFiltered = 0;
         nodesChanged = false;
         processingFilter = true;
         it = nodes.begin();
+        processedCount = 0;
     }
 
-    for (int i = 0; i < 10 && it != nodes.end(); i++) {
+    // Process nodes in batches of 10, but respect the display limit for infinite scroll
+    uint16_t batchSize = 10;
+    uint16_t processLimit = nodesScrollDisplayLimit; // Limit based on infinite scroll display count
+
+    for (int i = 0; i < batchSize && it != nodes.end() && processedCount < processLimit; i++) {
         applyNodesFilter(it->first, true);
         it++;
+        processedCount++;
     }
 
-    if (it == nodes.end()) {
+    if (it == nodes.end() || processedCount >= processLimit) {
         processingFilter = false;
     }
     updateNodesStatus();
