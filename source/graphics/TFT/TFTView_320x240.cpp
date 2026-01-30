@@ -2383,10 +2383,9 @@ void TFTView_320x240::ui_event_positionButton(lv_event_t *e)
 }
 
 /**
- * @brief Hard object culling for nodes panel
- * Actually DELETE nodes outside viewport buffer, recreate when scrolling back
- * Dramatically reduces LVGL object count and layout cost
- * Trade-off: slight delay when recreating nodes (but faster overall)
+ * @brief Simple infinite scroll - load on demand, hide far nodes
+ * Loads batches as you scroll near the bottom
+ * Hides nodes far from viewport to reduce rendering (but keeps in memory)
  */
 void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 {
@@ -2397,68 +2396,56 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 
     lv_obj_t *panel = (lv_obj_t *)lv_event_get_target(e);
 
-    // Prevent re-entry during layout updates
-    static bool culling_running = false;
-    if (culling_running)
+    // Prevent re-entry
+    static bool scroll_running = false;
+    if (scroll_running)
         return;
-    culling_running = true;
+    scroll_running = true;
 
-    const lv_coord_t CULL_BUFFER = 800;   // Delete nodes 800px outside visible area
-    const lv_coord_t LOAD_DISTANCE = 400; // Load more when within 400px of bottom
+    // Load more nodes when within 300px of bottom
+    const lv_coord_t LOAD_THRESHOLD = 300;
+    while (lv_obj_get_scroll_bottom(panel) < LOAD_THRESHOLD && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
+        uint16_t new_limit = THIS->nodesScrollDisplayLimit + 20;
+        if (new_limit > MAX_NUM_NODES_VIEW) {
+            new_limit = MAX_NUM_NODES_VIEW;
+        }
 
+        THIS->nodesScrollDisplayLimit = new_limit;
+        THIS->updateNodesFiltered(false);
+        lv_obj_update_layout(panel);
+        ILOG_DEBUG("Loaded nodes, limit now: %d", THIS->nodesScrollDisplayLimit);
+    }
+
+    // Hide nodes far from viewport (reduce GPU load)
+    const lv_coord_t HIDE_BUFFER = 300;
     lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
     lv_coord_t panel_h = lv_obj_get_height(panel);
 
-    // Cull zone: only keep nodes within this range
-    lv_coord_t cull_top = scroll_y - CULL_BUFFER;
-    lv_coord_t cull_bottom = scroll_y + panel_h + CULL_BUFFER;
-
-    // Collect nodes to DELETE (actually remove from DOM)
-    std::vector<uint32_t> to_delete;
     for (auto &node_pair : THIS->nodes) {
-        uint32_t nodeNum = node_pair.first;
         lv_obj_t *node_obj = node_pair.second;
-
         if (!node_obj)
             continue;
 
         lv_coord_t node_y = lv_obj_get_y(node_obj);
         lv_coord_t node_h = lv_obj_get_height(node_obj);
 
-        // If node is outside cull buffer, mark for deletion
-        if ((node_y + node_h < cull_top) || (node_y > cull_bottom)) {
-            to_delete.push_back(nodeNum);
-        }
-    }
+        bool in_view = (node_y + node_h > scroll_y - HIDE_BUFFER) && (node_y < scroll_y + panel_h + HIDE_BUFFER);
 
-    // Actually DELETE nodes outside viewport (frees LVGL memory)
-    // BUT keep them in the nodes map so they can be recreated if scrolled back
-    for (uint32_t nodeNum : to_delete) {
-        auto it = THIS->nodes.find(nodeNum);
-        if (it != THIS->nodes.end() && it->second) {
-            lv_obj_del(it->second);
-            it->second = nullptr; // Mark as deleted but keep in map
-            ILOG_DEBUG("Culled node 0x%08x (far outside viewport)", nodeNum);
-        }
-    }
-
-    // Load more nodes when approaching bottom of scroll
-    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE) {
-        while (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
-            uint16_t new_limit = THIS->nodesScrollDisplayLimit + 20;
-            if (new_limit > MAX_NUM_NODES_VIEW) {
-                new_limit = MAX_NUM_NODES_VIEW;
+        if (in_view) {
+            if (lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
+                lv_obj_clear_flag(node_obj, LV_OBJ_FLAG_HIDDEN);
             }
-
-            THIS->nodesScrollDisplayLimit = new_limit;
-            THIS->updateNodesFiltered(false);
-            lv_obj_update_layout(panel);
-
-            ILOG_DEBUG("Hard cull: loaded batch, now displaying %d nodes", THIS->nodesScrollDisplayLimit);
+        } else {
+            if (!lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
+                lv_obj_add_flag(node_obj, LV_OBJ_FLAG_HIDDEN);
+            }
         }
     }
 
-    culling_running = false;
+    scroll_running = false;
+}
+
+culling_running = false;
 }
 
 void TFTView_320x240::ui_screen_event_cb(lv_event_t *e)
