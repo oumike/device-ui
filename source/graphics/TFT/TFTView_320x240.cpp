@@ -2405,44 +2405,51 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
         return;
     update_scroll_running = true;
 
-    const lv_coord_t SCROLL_DISTANCE = 300; // Load when scroll gets within 300px of edge
+    const lv_coord_t SCROLL_DISTANCE = 500; // Load when scroll gets within 500px of edge
+    const uint32_t THROTTLE_MS = 300;       // Only check visibility every 300ms to reduce CPU
 
-    // Load more items as we scroll down
-    if (lv_obj_get_scroll_bottom(panel) < SCROLL_DISTANCE) {
-        // Try to show more nodes by increasing the display limit
-        uint16_t new_limit = THIS->nodesScrollDisplayLimit + 10;
+    static uint32_t last_visibility_check = 0;
+    uint32_t current_time = lv_tick_get();
+
+    // Aggressively load more items as we scroll down - check multiple times
+    while (lv_obj_get_scroll_bottom(panel) < SCROLL_DISTANCE && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
+        uint16_t new_limit = THIS->nodesScrollDisplayLimit + 30; // Load 30 at a time
         if (new_limit > MAX_NUM_NODES_VIEW) {
             new_limit = MAX_NUM_NODES_VIEW;
         }
 
-        if (new_limit > THIS->nodesScrollDisplayLimit) {
-            THIS->nodesScrollDisplayLimit = new_limit;
-            THIS->updateNodesFiltered(false);
-            lv_obj_update_layout(panel);
-            ILOG_DEBUG("Loaded more nodes: %d", THIS->nodesScrollDisplayLimit);
-        }
+        THIS->nodesScrollDisplayLimit = new_limit;
+        THIS->updateNodesFiltered(false);
+        lv_obj_update_layout(panel);
+        ILOG_DEBUG("Aggressively loaded nodes: %d, scroll_bottom: %d", THIS->nodesScrollDisplayLimit,
+                   lv_obj_get_scroll_bottom(panel));
     }
 
-    // Hide nodes far from viewport to reduce rendering
-    // This maintains the scrollbar size but stops rendering distant nodes
-    for (auto &node_pair : THIS->nodes) {
-        lv_obj_t *node_panel = node_pair.second;
-        lv_coord_t node_y = lv_obj_get_y(node_panel);
-        lv_coord_t node_height = lv_obj_get_height(node_panel);
-        lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
-        lv_coord_t panel_height = lv_obj_get_height(panel);
+    // Only do expensive visibility check every 300ms to improve performance
+    if ((current_time - last_visibility_check) >= THROTTLE_MS) {
+        last_visibility_check = current_time;
 
-        // Check if node is within visible area + buffer zone
-        const lv_coord_t BUFFER = 150;
-        bool in_view = (node_y + node_height > scroll_y - BUFFER) && (node_y < scroll_y + panel_height + BUFFER);
+        // Hide nodes far from viewport to reduce rendering
+        // Only check nodes that are actually in the nodes map
+        for (auto &node_pair : THIS->nodes) {
+            lv_obj_t *node_panel = node_pair.second;
+            lv_coord_t node_y = lv_obj_get_y(node_panel);
+            lv_coord_t node_height = lv_obj_get_height(node_panel);
+            lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
+            lv_coord_t panel_height = lv_obj_get_height(panel);
 
-        if (in_view) {
-            if (lv_obj_has_flag(node_panel, LV_OBJ_FLAG_HIDDEN)) {
-                lv_obj_clear_flag(node_panel, LV_OBJ_FLAG_HIDDEN);
-            }
-        } else {
-            if (!lv_obj_has_flag(node_panel, LV_OBJ_FLAG_HIDDEN)) {
-                lv_obj_add_flag(node_panel, LV_OBJ_FLAG_HIDDEN);
+            // Check if node is within visible area + buffer zone
+            const lv_coord_t BUFFER = 200;
+            bool in_view = (node_y + node_height > scroll_y - BUFFER) && (node_y < scroll_y + panel_height + BUFFER);
+
+            if (in_view) {
+                if (lv_obj_has_flag(node_panel, LV_OBJ_FLAG_HIDDEN)) {
+                    lv_obj_clear_flag(node_panel, LV_OBJ_FLAG_HIDDEN);
+                }
+            } else {
+                if (!lv_obj_has_flag(node_panel, LV_OBJ_FLAG_HIDDEN)) {
+                    lv_obj_add_flag(node_panel, LV_OBJ_FLAG_HIDDEN);
+                }
             }
         }
     }
