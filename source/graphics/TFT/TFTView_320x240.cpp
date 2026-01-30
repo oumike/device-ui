@@ -2395,38 +2395,45 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
         return;
 
     lv_event_code_t event_code = lv_event_get_code(e);
+
+    // Only do expensive updates on scroll END, not during continuous scroll
+    if (event_code == LV_EVENT_SCROLL_END) {
+        // Load more nodes if near bottom
+        lv_obj_t *panel = (lv_obj_t *)lv_event_get_target(e);
+        const lv_coord_t LOAD_DISTANCE = 400;
+
+        if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && self->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW &&
+            !self->nodesScrollLoadingMore) {
+            self->nodesScrollLoadingMore = true;
+
+            uint16_t new_limit = self->nodesScrollDisplayLimit + 10;
+            if (new_limit > MAX_NUM_NODES_VIEW) {
+                new_limit = MAX_NUM_NODES_VIEW;
+            }
+
+            self->nodesScrollDisplayLimit = new_limit;
+            lv_obj_update_layout(panel);
+
+            ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", self->nodesScrollDisplayLimit);
+
+            self->nodesScrollLoadingMore = false;
+        }
+
+        return;
+    }
+
+    // During continuous scroll: only hide/show visible nodes (no text/style updates)
     if (event_code != LV_EVENT_SCROLL) {
         return;
     }
 
     lv_obj_t *panel = (lv_obj_t *)lv_event_get_target(e);
 
-    // Prevent re-entry during layout updates
+    // Prevent re-entry during hide/show updates
     static bool scroll_running = false;
     if (scroll_running)
         return;
     scroll_running = true;
-
-    const lv_coord_t LOAD_DISTANCE = 400;
-
-    // Load more nodes when approaching bottom of scroll - ONCE, not in a loop
-    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && self->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW &&
-        !self->nodesScrollLoadingMore) {
-        self->nodesScrollLoadingMore = true;
-
-        uint16_t new_limit = self->nodesScrollDisplayLimit + 10;
-        if (new_limit > MAX_NUM_NODES_VIEW) {
-            new_limit = MAX_NUM_NODES_VIEW;
-        }
-
-        self->nodesScrollDisplayLimit = new_limit;
-        self->updateNodesFiltered(false);
-        lv_obj_update_layout(panel);
-
-        ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", self->nodesScrollDisplayLimit);
-
-        self->nodesScrollLoadingMore = false;
-    }
 
     // Hide nodes with 0-node buffer strategy - SINGLE PASS
     lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
