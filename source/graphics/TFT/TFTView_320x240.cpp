@@ -137,7 +137,7 @@ TFTView_320x240 *TFTView_320x240::instance(const DisplayDriverConfig &cfg)
 
 TFTView_320x240::TFTView_320x240(const DisplayDriverConfig *cfg, DisplayDriver *driver)
     : MeshtasticView(cfg, driver, new ViewController), screensInitialised(false), nodesFiltered(0), nodesChanged(true),
-      processingFilter(false), nodesScrollDisplayLimit(50), packetLogEnabled(false), detectorRunning(false), cardDetected(false),
+      processingFilter(false), nodesScrollDisplayLimit(100), packetLogEnabled(false), detectorRunning(false), cardDetected(false),
       formatSD(false), packetCounter(0), actTime(0), uptime(0), lastHeard(0), hasPosition(false), myLatitude(0), myLongitude(0),
       topNodeLL(nullptr), scans(0), selectedHops(0), chooseNodeSignalScanner(false), chooseNodeTraceRoute(false), qr(nullptr),
       db{}
@@ -7113,8 +7113,8 @@ void TFTView_320x240::updateNodesFiltered(bool reset)
         processedCount = 0;
     }
 
-    // Process nodes in batches of 10, but respect the display limit for infinite scroll
-    uint16_t batchSize = 10;
+    // Process nodes in batches of 30, but respect the display limit for infinite scroll
+    uint16_t batchSize = 30;
     uint16_t processLimit = nodesScrollDisplayLimit; // Limit based on infinite scroll display count
 
     for (int i = 0; i < batchSize && it != nodes.end() && processedCount < processLimit; i++) {
