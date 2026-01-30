@@ -137,10 +137,10 @@ TFTView_320x240 *TFTView_320x240::instance(const DisplayDriverConfig &cfg)
 
 TFTView_320x240::TFTView_320x240(const DisplayDriverConfig *cfg, DisplayDriver *driver)
     : MeshtasticView(cfg, driver, new ViewController), screensInitialised(false), nodesFiltered(0), nodesChanged(true),
-      processingFilter(false), nodesScrollDisplayLimit(50), nodesScrollLoadingMore(false), packetLogEnabled(false),
-      detectorRunning(false), cardDetected(false), formatSD(false), packetCounter(0), actTime(0), uptime(0), lastHeard(0),
-      hasPosition(false), myLatitude(0), myLongitude(0), topNodeLL(nullptr), scans(0), selectedHops(0),
-      chooseNodeSignalScanner(false), chooseNodeTraceRoute(false), qr(nullptr), db{}
+      processingFilter(false), nodesScrollDisplayLimit(50), packetLogEnabled(false), detectorRunning(false), cardDetected(false),
+      formatSD(false), packetCounter(0), actTime(0), uptime(0), lastHeard(0), hasPosition(false), myLatitude(0), myLongitude(0),
+      topNodeLL(nullptr), scans(0), selectedHops(0), chooseNodeSignalScanner(false), chooseNodeTraceRoute(false), qr(nullptr),
+      db{}
 {
     filter.active = false;
     highlight.active = false;
@@ -2386,6 +2386,7 @@ void TFTView_320x240::ui_event_positionButton(lv_event_t *e)
  * @brief Infinite scroll handler for nodes panel
  * Loads additional nodes progressively as user scrolls to 75-80% of scrollable content
  * Batch loads 10 nodes at a time to maintain smooth performance
+ * Uses throttling to prevent excessive rendering during continuous scrolling
  */
 void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 {
@@ -2415,12 +2416,14 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
     // Check if we've scrolled to 75% of scrollable content
     float scroll_ratio = (float)scroll_y / scrollable_height;
     const float SCROLL_THRESHOLD = 0.75f;
+    const uint32_t THROTTLE_MS = 500; // Throttle to 500ms minimum between loads
 
-    // Prevent concurrent load requests and check threshold
-    if (scroll_ratio >= SCROLL_THRESHOLD && !THIS->nodesScrollLoadingMore) {
-        // Prevent multiple load requests
-        THIS->nodesScrollLoadingMore = true;
+    // Use static throttle timer to prevent excessive updates during continuous scrolling
+    static uint32_t last_load_time = 0;
+    uint32_t current_time = lv_tick_get();
 
+    // Check threshold and throttle: only load if we're past threshold AND enough time has passed
+    if (scroll_ratio >= SCROLL_THRESHOLD && (current_time - last_load_time) >= THROTTLE_MS) {
         // Increment display limit by 10 nodes, cap at MAX_NUM_NODES_VIEW
         uint16_t new_limit = THIS->nodesScrollDisplayLimit + 10;
         if (new_limit > MAX_NUM_NODES_VIEW) {
@@ -2430,6 +2433,7 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
         // Only trigger update if the limit actually changed
         if (new_limit > THIS->nodesScrollDisplayLimit) {
             THIS->nodesScrollDisplayLimit = new_limit;
+            last_load_time = current_time;
 
             ILOG_DEBUG("Infinite scroll triggered: displaying %d nodes", THIS->nodesScrollDisplayLimit);
 
@@ -2437,9 +2441,6 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
             THIS->updateNodesFiltered(false);
             THIS->updateNodesStatus();
         }
-
-        // Allow next load after a brief delay
-        THIS->nodesScrollLoadingMore = false;
     }
 }
 
