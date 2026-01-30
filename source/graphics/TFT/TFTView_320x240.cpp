@@ -2383,9 +2383,8 @@ void TFTView_320x240::ui_event_positionButton(lv_event_t *e)
 }
 
 /**
- * @brief Simple infinite scroll - load on demand, hide far nodes
- * Loads batches as you scroll near the bottom
- * Hides nodes far from viewport to reduce rendering (but keeps in memory)
+ * @brief Simple infinite scroll - hide far nodes, no deletion
+ * Safe approach: just load and hide, never delete
  */
 void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 {
@@ -2396,30 +2395,37 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 
     lv_obj_t *panel = (lv_obj_t *)lv_event_get_target(e);
 
-    // Prevent re-entry
+    // Prevent re-entry during layout updates
     static bool scroll_running = false;
     if (scroll_running)
         return;
     scroll_running = true;
 
-    // Load more nodes when within 300px of bottom
-    const lv_coord_t LOAD_THRESHOLD = 300;
-    while (lv_obj_get_scroll_bottom(panel) < LOAD_THRESHOLD && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
-        uint16_t new_limit = THIS->nodesScrollDisplayLimit + 20;
-        if (new_limit > MAX_NUM_NODES_VIEW) {
-            new_limit = MAX_NUM_NODES_VIEW;
-        }
+    const lv_coord_t LOAD_DISTANCE = 400;
+    const lv_coord_t HIDE_BUFFER = 500;
 
-        THIS->nodesScrollDisplayLimit = new_limit;
-        THIS->updateNodesFiltered(false);
-        lv_obj_update_layout(panel);
-        ILOG_DEBUG("Loaded nodes, limit now: %d", THIS->nodesScrollDisplayLimit);
-    }
-
-    // Hide nodes far from viewport (reduce GPU load)
-    const lv_coord_t HIDE_BUFFER = 300;
     lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
     lv_coord_t panel_h = lv_obj_get_height(panel);
+
+    // Load more nodes when approaching bottom of scroll
+    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE) {
+        while (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
+            uint16_t new_limit = THIS->nodesScrollDisplayLimit + 20;
+            if (new_limit > MAX_NUM_NODES_VIEW) {
+                new_limit = MAX_NUM_NODES_VIEW;
+            }
+
+            THIS->nodesScrollDisplayLimit = new_limit;
+            THIS->updateNodesFiltered(false);
+            lv_obj_update_layout(panel);
+
+            ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", THIS->nodesScrollDisplayLimit);
+        }
+    }
+
+    // Hide nodes far outside viewport
+    lv_coord_t hide_top = scroll_y - HIDE_BUFFER;
+    lv_coord_t hide_bottom = scroll_y + panel_h + HIDE_BUFFER;
 
     for (auto &node_pair : THIS->nodes) {
         lv_obj_t *node_obj = node_pair.second;
@@ -2429,7 +2435,7 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
         lv_coord_t node_y = lv_obj_get_y(node_obj);
         lv_coord_t node_h = lv_obj_get_height(node_obj);
 
-        bool in_view = (node_y + node_h > scroll_y - HIDE_BUFFER) && (node_y < scroll_y + panel_h + HIDE_BUFFER);
+        bool in_view = (node_y + node_h > hide_top) && (node_y < hide_bottom);
 
         if (in_view) {
             if (lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
@@ -2443,9 +2449,6 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
     }
 
     scroll_running = false;
-}
-
-culling_running = false;
 }
 
 void TFTView_320x240::ui_screen_event_cb(lv_event_t *e)
