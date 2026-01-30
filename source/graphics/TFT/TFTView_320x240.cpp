@@ -2396,7 +2396,7 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
         return;
     }
 
-    lv_obj_t *panel = (lv_obj_t *)e->target;
+    lv_obj_t *panel = (lv_obj_t *)lv_event_get_target(e);
 
     // Get current scroll position
     lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
