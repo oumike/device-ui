@@ -2432,13 +2432,13 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
     }
 
     // Actually DELETE nodes outside viewport (frees LVGL memory)
+    // BUT keep them in the nodes map so they can be recreated if scrolled back
     for (uint32_t nodeNum : to_delete) {
         auto it = THIS->nodes.find(nodeNum);
-        if (it != THIS->nodes.end()) {
+        if (it != THIS->nodes.end() && it->second) {
             lv_obj_del(it->second);
-            THIS->nodes.erase(it);
-            THIS->nodeCount--;
-            ILOG_DEBUG("Culled node 0x%08x (far outside viewport), remaining: %d", nodeNum, THIS->nodeCount);
+            it->second = nullptr; // Mark as deleted but keep in map
+            ILOG_DEBUG("Culled node 0x%08x (far outside viewport)", nodeNum);
         }
     }
 
