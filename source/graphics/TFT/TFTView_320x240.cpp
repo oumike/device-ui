@@ -2383,11 +2383,17 @@ void TFTView_320x240::ui_event_positionButton(lv_event_t *e)
 }
 
 /**
- * @brief Simple infinite scroll - hide far nodes, no deletion
- * Safe approach: just load and hide, never delete
+ * @brief Hard object culling for nodes panel
+ * Actually DELETE nodes outside viewport buffer, recreate when scrolling back
+ * Dramatically reduces LVGL object count and layout cost
+ * Trade-off: slight delay when recreating nodes (but faster overall)
  */
 void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 {
+    auto *self = static_cast<TFTView_320x240 *>(lv_event_get_user_data(e));
+    if (!self)
+        return;
+
     lv_event_code_t event_code = lv_event_get_code(e);
     if (event_code != LV_EVENT_SCROLL) {
         return;
@@ -2402,50 +2408,78 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
     scroll_running = true;
 
     const lv_coord_t LOAD_DISTANCE = 400;
-    const lv_coord_t HIDE_BUFFER = 500;
 
+    // Load more nodes when approaching bottom of scroll - ONCE, not in a loop
+    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && self->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW &&
+        !self->nodesScrollLoadingMore) {
+        self->nodesScrollLoadingMore = true;
+
+        uint16_t new_limit = self->nodesScrollDisplayLimit + 10;
+        if (new_limit > MAX_NUM_NODES_VIEW) {
+            new_limit = MAX_NUM_NODES_VIEW;
+        }
+
+        self->nodesScrollDisplayLimit = new_limit;
+        self->updateNodesFiltered(false);
+        lv_obj_update_layout(panel);
+
+        ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", self->nodesScrollDisplayLimit);
+
+        self->nodesScrollLoadingMore = false;
+    }
+
+    // Hide nodes with 0-node buffer strategy - SINGLE PASS
     lv_coord_t scroll_y = lv_obj_get_scroll_y(panel);
     lv_coord_t panel_h = lv_obj_get_height(panel);
 
-    // Load more nodes when approaching bottom of scroll
-    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE) {
-        while (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && THIS->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW) {
-            uint16_t new_limit = THIS->nodesScrollDisplayLimit + 20;
-            if (new_limit > MAX_NUM_NODES_VIEW) {
-                new_limit = MAX_NUM_NODES_VIEW;
-            }
+    // Find first visible node AND hide/show in single loop
+    int node_idx = 0;
 
-            THIS->nodesScrollDisplayLimit = new_limit;
-            THIS->updateNodesFiltered(false);
-            lv_obj_update_layout(panel);
-
-            ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", THIS->nodesScrollDisplayLimit);
-        }
-    }
-
-    // Hide nodes far outside viewport
-    lv_coord_t hide_top = scroll_y - HIDE_BUFFER;
-    lv_coord_t hide_bottom = scroll_y + panel_h + HIDE_BUFFER;
-
-    for (auto &node_pair : THIS->nodes) {
+    for (auto &node_pair : self->nodes) {
         lv_obj_t *node_obj = node_pair.second;
         if (!node_obj)
             continue;
 
+        // Only process up to display limit for performance
+        if (node_idx >= self->nodesScrollDisplayLimit)
+            break;
+
         lv_coord_t node_y = lv_obj_get_y(node_obj);
         lv_coord_t node_h = lv_obj_get_height(node_obj);
 
-        bool in_view = (node_y + node_h > hide_top) && (node_y < hide_bottom);
+        // Check if node is within viewport
+        bool is_visible = (node_y + node_h >= scroll_y && node_y <= scroll_y + panel_h);
 
-        if (in_view) {
+        if (is_visible) {
+            // Show this node
             if (lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
                 lv_obj_clear_flag(node_obj, LV_OBJ_FLAG_HIDDEN);
             }
         } else {
+            // Hide this node
             if (!lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
                 lv_obj_add_flag(node_obj, LV_OBJ_FLAG_HIDDEN);
             }
         }
+
+        node_idx++;
+    }
+
+    // Hide all nodes beyond display limit
+    for (auto &node_pair : self->nodes) {
+        lv_obj_t *node_obj = node_pair.second;
+        if (!node_obj)
+            continue;
+
+        if (node_idx >= MAX_NUM_NODES_VIEW)
+            break;
+
+        if (node_idx >= self->nodesScrollDisplayLimit) {
+            if (!lv_obj_has_flag(node_obj, LV_OBJ_FLAG_HIDDEN)) {
+                lv_obj_add_flag(node_obj, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+        node_idx++;
     }
 
     scroll_running = false;

@@ -401,6 +401,7 @@ class TFTView_320x240 : public MeshtasticView
     bool nodesChanged;                                    // true if nodes changed (added or purged)
     bool processingFilter;                                // indicates that filtering is ongoing
     uint16_t nodesScrollDisplayLimit;                     // current node display limit for infinite scroll
+    bool nodesScrollLoadingMore;                          // prevent loading multiple batches simultaneously
     bool packetLogEnabled;                                // display received packets
     bool detectorRunning;                                 // meshDetector is active
     bool cardDetected;                                    // SD has been detected
