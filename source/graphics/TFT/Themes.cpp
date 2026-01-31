@@ -96,7 +96,7 @@ enum ThemeColor {
 uint32_t themeColor[][2] = {
     // dark,       light
     {0xff020712, 0xfff4f4f4}, // eMainScreenStyle
-    {0xff0f1423, 0xff67ea94}, // eTopPanelBg 0d0f1b
+    {0xff0f1423, 0xff67ea94}, // eTopPanelBg
     {0xffE0E0E0, 0xff212121}, // eTopPanelText
     {0xff0f1423, 0xff67ea94}, // eTopImageBg
     {0xffffffff, 0xff212121}, // eTopImageRecolor
