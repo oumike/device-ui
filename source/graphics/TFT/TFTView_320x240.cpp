@@ -1231,6 +1231,13 @@ void TFTView_320x240::ui_event_ChatButton(lv_event_t *e)
             ignoreClicked = false;
             return;
         }
+
+        // Ignore click if this interaction was actually a scroll gesture
+        lv_indev_t *indev = lv_indev_active();
+        if (indev && lv_indev_get_scroll_obj(indev)) {
+            return; // treat as scroll, not click
+        }
+
         lv_obj_set_style_border_color(target, colorMidGray, LV_PART_MAIN | LV_STATE_DEFAULT);
 
         uint32_t channelOrNode = (unsigned long)e->user_data;
