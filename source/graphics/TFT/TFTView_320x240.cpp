@@ -1238,6 +1238,18 @@ void TFTView_320x240::ui_event_ChatButton(lv_event_t *e)
             return; // treat as scroll, not click
         }
 
+        // Only treat as a click when the touch is inside the label bounds (avoid blank gutter clicks)
+        lv_obj_t *label = target->LV_OBJ_IDX(0); // chats_button_label
+        if (indev && label) {
+            lv_point_t pt;
+            lv_indev_get_point(indev, &pt);
+            lv_area_t la;
+            lv_obj_get_coords(label, &la); // screen coords of label
+            if (!(pt.x >= la.x1 && pt.x <= la.x2 && pt.y >= la.y1 && pt.y <= la.y2)) {
+                return; // touched outside label area, ignore
+            }
+        }
+
         lv_obj_set_style_border_color(target, colorMidGray, LV_PART_MAIN | LV_STATE_DEFAULT);
 
         uint32_t channelOrNode = (unsigned long)e->user_data;
@@ -6536,12 +6548,14 @@ void TFTView_320x240::newMessage(uint32_t nodeNum, lv_obj_t *container, uint8_t 
     lv_obj_set_align(msgLabel, LV_ALIGN_LEFT_MID);
     lv_label_set_text(msgLabel, msg);
     add_style_new_message_style(msgLabel);
+    lv_obj_add_flag(msgLabel, LV_OBJ_FLAG_CLICKABLE); // enable tap on bubble
+    // Only the label (bubble) is clickable to open sender node; taps in gutter are ignored
+    lv_obj_add_event_cb(msgLabel, ui_event_chatNodeButton, LV_EVENT_CLICKED, (void *)nodeNum);
 
     if (state == MeshtasticView::eRunning) {
         lv_obj_scroll_to_view(hiddenPanel, LV_ANIM_ON);
         lv_obj_move_foreground(objects.message_input_area);
     }
-    lv_obj_add_event_cb(hiddenPanel, ui_event_chatNodeButton, LV_EVENT_CLICKED, (void *)nodeNum);
 }
 
 /**
