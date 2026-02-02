@@ -2633,36 +2633,38 @@ void TFTView_320x240::loadMap(void)
             sortedLat.reserve(nodeObjects.size());
             sortedLon.reserve(nodeObjects.size());
             for (auto it : nodeObjects) {
-                lv_obj_t *p = nodes[it.first];
-                int32_t lat = (long)p->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                int32_t lon = (long)p->LV_OBJ_IDX(node_pos2_idx)->user_data;
-                if (lat && lon) {
-                    sortedLat.push_back(lat);
-                    sortedLon.push_back(lon);
+                auto nd = nodeData.find(it.first);
+                if (nd != nodeData.end() && nd->second.hasPosition && nd->second.lat && nd->second.lon) {
+                    sortedLat.push_back(nd->second.lat);
+                    sortedLon.push_back(nd->second.lon);
                 }
             }
-            std::sort(sortedLat.begin(), sortedLat.end());
-            std::sort(sortedLon.begin(), sortedLon.end());
-            int64_t latcenter = 0;
-            int64_t loncenter = 0;
-            int32_t count = 0;
-            // select just the closest 60% of nodes, ignore the rest
-            int pp = 100 / 20;
-            for (int i = sortedLat.size() / pp; i < pp * sortedLat.size() / pp; i++) {
-                latcenter += sortedLat[i];
-                loncenter += sortedLon[i];
-                count++;
-            }
-            latcenter /= count;
-            loncenter /= count;
-            map->setHomeLocation(latcenter * 1e-7, loncenter * 1e-7);
+            if (!sortedLat.empty() && !sortedLon.empty()) {
+                std::sort(sortedLat.begin(), sortedLat.end());
+                std::sort(sortedLon.begin(), sortedLon.end());
+                int64_t latcenter = 0;
+                int64_t loncenter = 0;
+                int32_t count = 0;
+                // select just the closest 60% of nodes, ignore the rest
+                int pp = 100 / 20;
+                for (int i = sortedLat.size() / pp; i < pp * sortedLat.size() / pp; i++) {
+                    latcenter += sortedLat[i];
+                    loncenter += sortedLon[i];
+                    count++;
+                }
+                latcenter /= count;
+                loncenter /= count;
+                map->setHomeLocation(latcenter * 1e-7, loncenter * 1e-7);
 
-            // calculate optimal zoom factor to fit in all nodes of this range
-            lv_obj_update_layout(objects.raw_map_panel);
-            float rangeDeg = 1e-7 * (sortedLon[(pp - 1) * sortedLon.size() / pp] - sortedLon[sortedLon.size() / pp]);
-            float distanceKm = abs(rangeDeg * 111.32 * cos(1e-7 * sortedLat[sortedLat.size() / 2]));
-            uint32_t zoom = sqrt(156.543034f / distanceKm * abs(cos(1e-7 * sortedLat[sortedLat.size() / 2])) * 256) + 1;
-            map->setZoom(zoom);
+                // calculate optimal zoom factor to fit in all nodes of this range
+                lv_obj_update_layout(objects.raw_map_panel);
+                float rangeDeg = 1e-7 * (sortedLon[(pp - 1) * sortedLon.size() / pp] - sortedLon[sortedLon.size() / pp]);
+                float distanceKm = abs(rangeDeg * 111.32 * cos(1e-7 * sortedLat[sortedLat.size() / 2]));
+                uint32_t zoom = sqrt(156.543034f / distanceKm * abs(cos(1e-7 * sortedLat[sortedLat.size() / 2])) * 256) + 1;
+                map->setZoom(zoom);
+            } else {
+                map->setZoom(3);
+            }
         } else {
             // use default location @theBigBentern
             map->setZoom(3);
@@ -2676,9 +2678,9 @@ void TFTView_320x240::loadMap(void)
         // finally add all node images to the map
         if (!nodeObjects.empty()) {
             for (auto it : nodeObjects) {
-                lv_obj_t *p = nodes[it.first];
-                float lat = 1e-7 * (long)p->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                float lon = 1e-7 * (long)p->LV_OBJ_IDX(node_pos2_idx)->user_data;
+                auto nd = nodeData.find(it.first);
+                float lat = (nd != nodeData.end() && nd->second.hasPosition) ? 1e-7f * nd->second.lat : 0.0f;
+                float lon = (nd != nodeData.end() && nd->second.hasPosition) ? 1e-7f * nd->second.lon : 0.0f;
                 map->add(it.first, lat, lon, drawObjectCB);
                 lv_obj_add_flag(it.second, LV_OBJ_FLAG_CLICKABLE);
                 lv_obj_add_event_cb(it.second, ui_event_mapNodeButton, LV_EVENT_CLICKED, (void *)it.first);
@@ -2742,6 +2744,11 @@ void TFTView_320x240::updateLocationMap(uint32_t num)
  */
 void TFTView_320x240::addOrUpdateMap(uint32_t nodeNum, int32_t lat, int32_t lon)
 {
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.hasPosition = true;
+
     auto it = nodeObjects.find(nodeNum);
     if (it == nodeObjects.end()) {
         uint32_t bgColor, fgColor;
@@ -2785,6 +2792,7 @@ void TFTView_320x240::addOrUpdateMap(uint32_t nodeNum, int32_t lat, int32_t lon)
     } else {
         if (map) {
             map->update(it->first, lat * 1e-7, lon * 1e-7);
+            updateLocationMap(map->getObjectsOnMap());
         }
     }
 }
@@ -4829,12 +4837,27 @@ void TFTView_320x240::setDeviceMetaData(int hw_model, const char *version, bool 
 
 void TFTView_320x240::addOrUpdateNode(uint32_t nodeNum, uint8_t channel, uint32_t lastHeard, const meshtastic_User &cfg)
 {
+    // keep source-of-truth in nodeData
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.id = nodeNum;
+    rec.channel = channel;
+    rec.lastHeard = lastHeard;
+    rec.shortName = cfg.short_name;
+    rec.longName = cfg.long_name;
+    rec.role = (MeshtasticView::eRole)cfg.role;
+    rec.hasKey = cfg.public_key.size != 0;
+    rec.isUnmessagable = cfg.has_is_unmessagable && cfg.is_unmessagable;
+    rec.hasUser = true;
+
     if (nodes.find(nodeNum) == nodes.end()) {
         addNode(nodeNum, channel, cfg.short_name, cfg.long_name, lastHeard, (MeshtasticView::eRole)cfg.role,
                 cfg.public_key.size != 0, cfg.has_is_unmessagable && cfg.is_unmessagable);
     } else {
         updateNode(nodeNum, channel, cfg);
     }
+
+    reorderNodesFromData();
+    updateNodesStatus();
 }
 
 /**
@@ -4853,6 +4876,17 @@ void TFTView_320x240::addOrUpdateNode(uint32_t nodeNum, uint8_t channel, uint32_
 void TFTView_320x240::updateNode(uint32_t nodeNum, uint8_t ch, const meshtastic_User &cfg)
 {
     db.user = cfg;
+
+    // keep record in sync
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.channel = ch;
+    rec.shortName = cfg.short_name;
+    rec.longName = cfg.long_name;
+    rec.role = (MeshtasticView::eRole)cfg.role;
+    rec.hasKey = cfg.public_key.size != 0;
+    rec.isUnmessagable = cfg.has_is_unmessagable && cfg.is_unmessagable;
+    rec.hasUser = true;
+
     auto it = nodes.find(nodeNum);
     if (it != nodes.end() && it->second) {
         if (it->first == ownNode) {
@@ -4914,6 +4948,15 @@ void TFTView_320x240::updateNode(uint32_t nodeNum, uint8_t ch, const meshtastic_
 
 void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon, int32_t alt, uint32_t sats, uint32_t precision)
 {
+    // persist data first
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.alt = alt;
+    rec.sats = sats;
+    rec.precision = precision;
+    rec.hasPosition = lat != 0 || lon != 0;
+
     int32_t altU = abs(alt) < 10000 ? alt : 0;
     char units[3] = {};
     if (db.config.display.units == meshtastic_Config_DisplayConfig_DisplayUnits_METRIC) {
@@ -4954,14 +4997,9 @@ void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon,
             myLongitude = lon;
 
             // go through existing node list and update distance
-            // TODO: need incremental update!?
-            for (auto &it : nodes) {
-                if (it.first != ownNode) {
-                    int32_t nlat = (long)it.second->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                    int32_t nlon = (long)it.second->LV_OBJ_IDX(node_pos2_idx)->user_data;
-                    if (nlat != 0 && nlon != 0) {
-                        updateDistance(it.first, nlat, nlon);
-                    }
+            for (auto &it : nodeData) {
+                if (it.first != ownNode && it.second.hasPosition) {
+                    updateDistance(it.first, it.second.lat, it.second.lon);
                 }
             }
             // update own location on map
@@ -4986,7 +5024,7 @@ void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon,
             sprintf(buf, "%d%s MSL  %u sats", altU, units, sats);
         sprintf(buf, "%d%s MSL", altU, units);
         lv_label_set_text(panel->LV_OBJ_IDX(node_pos2_idx), buf);
-        // store lat/lon in user_data, because we need these values later to calculate the distance to us
+        // no longer depend on lvgl user_data for source-of-truth
         panel->LV_OBJ_IDX(node_pos1_idx)->user_data = (void *)lat;
         panel->LV_OBJ_IDX(node_pos2_idx)->user_data = (void *)lon;
         lv_obj_remove_flag(panel->LV_OBJ_IDX(node_pos1_idx), LV_OBJ_FLAG_HIDDEN);
@@ -5027,6 +5065,12 @@ void TFTView_320x240::updateDistance(uint32_t nodeNum, int32_t lat, int32_t lon)
     lv_obj_t *userShort = nodes[nodeNum]->LV_OBJ_IDX(node_lbs_idx);
     lv_label_set_text(userShort, buf);
     lv_obj_set_pos(userShort, 30, -1);
+
+    // persist distance source coords in data map as well
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.hasPosition = true;
 }
 
 /**
@@ -5040,6 +5084,12 @@ void TFTView_320x240::updateDistance(uint32_t nodeNum, int32_t lat, int32_t lon)
  */
 void TFTView_320x240::updateMetrics(uint32_t nodeNum, uint32_t bat_level, float voltage, float chUtil, float airUtil)
 {
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.batLevel = bat_level;
+    rec.voltage = voltage;
+    rec.chUtil = chUtil;
+    rec.airUtil = airUtil;
+
     auto it = nodes.find(nodeNum);
     if (it != nodes.end()) {
         char buf[48];
@@ -5601,33 +5651,36 @@ void TFTView_320x240::purgeNode(uint32_t nodeNum)
 bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
 {
     lv_obj_t *panel = nodes[nodeNum];
+    auto nd = nodeData.find(nodeNum);
+    const NodeRecord *rec = (nd != nodeData.end()) ? &nd->second : nullptr;
+
     bool hide = false;
     if (nodeNum != ownNode /* && filter.active*/) { // TODO
         if (lv_obj_has_state(objects.nodes_filter_unknown_switch, LV_STATE_CHECKED)) {
-            if (lv_img_get_src(panel->LV_OBJ_IDX(node_img_idx)) == &img_circle_question_image) {
+            if (rec && rec->hasUser == false) {
                 hide = true;
             }
         }
         if (lv_obj_has_state(objects.nodes_filter_offline_switch, LV_STATE_CHECKED)) {
-            time_t lastHeard = (time_t)panel->LV_OBJ_IDX(node_lh_idx)->user_data;
+            time_t lastHeard = rec ? rec->lastHeard : (time_t)panel->LV_OBJ_IDX(node_lh_idx)->user_data;
             if (lastHeard == 0 || curtime - lastHeard > secs_until_offline)
                 hide = true;
         }
         if (lv_obj_has_state(objects.nodes_filter_public_key_switch, LV_STATE_CHECKED)) {
-            bool hasKey = (unsigned long)panel->LV_OBJ_IDX(node_bat_idx)->user_data == 1;
+            bool hasKey = rec ? rec->hasKey : ((unsigned long)panel->LV_OBJ_IDX(node_bat_idx)->user_data == 1);
             if (!hasKey)
                 hide = true;
         }
         if (lv_dropdown_get_selected(objects.nodes_filter_channel_dropdown) != 0) {
             int selected = lv_dropdown_get_selected(objects.nodes_filter_channel_dropdown);
             if (selected != 0) {
-                uint8_t ch = (uint8_t)(unsigned long)panel->user_data;
+                uint8_t ch = rec ? rec->channel : (uint8_t)(unsigned long)panel->user_data;
                 if (selected - 1 != ch)
                     hide = true;
             }
         }
         if (lv_dropdown_get_selected(objects.nodes_filter_hops_dropdown) != 0) {
-            int32_t hopsAway = (signed long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
+            int32_t hopsAway = rec ? rec->hopsAway : (signed long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
             int selected = lv_dropdown_get_selected(objects.nodes_filter_hops_dropdown) - 7;
             if (hopsAway < 0)
                 hide = true;
@@ -5641,25 +5694,26 @@ bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
         }
 #if 0
         if (lv_obj_has_state(objects.nodes_filter_mqtt_switch, LV_STATE_CHECKED)) {
-            bool viaMqtt = false; // TODO (unsigned long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
+            bool viaMqtt = rec ? rec->viaMqtt : false; // TODO
             if (viaMqtt)
                 hide = true;
         }
 #endif
         if (lv_obj_has_state(objects.nodes_filter_position_switch, LV_STATE_CHECKED)) {
-            if (lv_label_get_text(panel->LV_OBJ_IDX(node_pos1_idx))[0] == '\0')
+            bool hasPos = rec ? rec->hasPosition : lv_label_get_text(panel->LV_OBJ_IDX(node_pos1_idx))[0] != '\0';
+            if (!hasPos)
                 hide = true;
         }
         const char *name = lv_textarea_get_text(objects.nodes_filter_name_area);
         if (name[0] != '\0') {
+            const char *longName = rec ? rec->longName.c_str() : lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx));
+            const char *shortName = rec ? rec->shortName.c_str() : lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx));
             if (name[0] != '!') { // use '!' char to negate search result
-                if (!strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx)), name) &&
-                    !strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx)), name)) {
+                if (!strcasestr(longName, name) && !strcasestr(shortName, name)) {
                     hide = true;
                 }
             } else {
-                if (strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx)), &name[1]) ||
-                    strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx)), &name[1])) {
+                if (strcasestr(longName, &name[1]) || strcasestr(shortName, &name[1])) {
                     hide = true;
                 }
             }
@@ -5746,6 +5800,72 @@ bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
         lv_obj_set_style_border_width(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     return hide; // TODO || filter.active;
+}
+
+void TFTView_320x240::rebuildNodesFromData()
+{
+    // create missing panels from data map; keep existing ones
+    for (auto &kv : nodeData) {
+        uint32_t nodeNum = kv.first;
+        NodeRecord &rec = kv.second;
+        if (nodes.find(nodeNum) != nodes.end())
+            continue;
+
+        // fallback defaults
+        const char *shortName = rec.shortName.empty() ? "" : rec.shortName.c_str();
+        const char *longName = rec.longName.empty() ? "" : rec.longName.c_str();
+        char shortBuf[8] = {};
+        char longBuf[32] = {};
+        if (!shortName[0]) {
+            sprintf(shortBuf, "%04x", nodeNum & 0xffff);
+            shortName = shortBuf;
+        }
+        if (!longName[0]) {
+            snprintf(longBuf, sizeof(longBuf), "Node %s", shortName);
+            longName = longBuf;
+        }
+
+        addNode(nodeNum, rec.channel, shortName, longName, rec.lastHeard, rec.role, rec.hasKey, rec.isUnmessagable);
+    }
+    nodesChanged = true;
+}
+
+void TFTView_320x240::reorderNodesFromData()
+{
+    rebuildNodesFromData();
+
+    // build ordered list: ownNode first, then by lastHeard desc, then id
+    std::vector<uint32_t> order;
+    order.reserve(nodeData.size());
+    for (auto &kv : nodeData) {
+        order.push_back(kv.first);
+    }
+    std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) {
+        if (a == ownNode && b != ownNode)
+            return true;
+        if (b == ownNode && a != ownNode)
+            return false;
+        const auto &ra = nodeData.at(a);
+        const auto &rb = nodeData.at(b);
+        uint32_t la = ra.lastHeard;
+        uint32_t lb = rb.lastHeard;
+        if (la != lb)
+            return la > lb;
+        return a < b;
+    });
+
+    // move panels to match order; keep start index at 1 to leave header intact
+    int idx = 1;
+    for (auto id : order) {
+        auto it = nodes.find(id);
+        if (it == nodes.end())
+            continue;
+        int maxIdx = objects.nodes_panel->spec_attr->child_cnt - 1;
+        int target = std::min(std::max(idx, 1), maxIdx);
+        lv_obj_move_to_index(it->second, target);
+        idx++;
+    }
+    nodesChanged = true;
 }
 
 void TFTView_320x240::messageAlert(const char *alert, bool show)
@@ -7060,7 +7180,11 @@ void TFTView_320x240::removeNode(uint32_t nodeNum)
 {
     auto it = nodes.find(nodeNum);
     if (it != nodes.end()) {
+        lv_obj_del(it->second);
+        nodes.erase(it);
     }
+    removeFromMap(nodeNum);
+    nodeData.erase(nodeNum);
 }
 
 void TFTView_320x240::setNodeImage(uint32_t nodeNum, eRole role, bool unmessagable, lv_obj_t *img)
@@ -7171,11 +7295,14 @@ void TFTView_320x240::updateLastHeard(uint32_t nodeNum)
 {
     auto it = nodes.find(nodeNum);
     if (it != nodes.end() && it->second) {
-        time_t lastHeard = (time_t)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+        auto &rec = getOrCreateNodeRecord(nodeNum);
+        time_t prevLastHeard = rec.lastHeard ? rec.lastHeard : (time_t)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+        rec.lastHeard = curtime;
+
         it->second->LV_OBJ_IDX(node_lh_idx)->user_data = (void *)curtime;
         lv_label_set_text(it->second->LV_OBJ_IDX(node_lh_idx), _("now"));
         if (it->first != ownNode) {
-            if (lastHeard > 0 && curtime - lastHeard >= secs_until_offline) {
+            if (prevLastHeard > 0 && curtime - prevLastHeard >= secs_until_offline) {
                 nodesOnline++;
                 applyNodesFilter(nodeNum);
                 updateNodesStatus();
