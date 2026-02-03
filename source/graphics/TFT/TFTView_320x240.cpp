@@ -2442,24 +2442,9 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 
     const lv_coord_t LOAD_DISTANCE = 300;
 
-    // Load more nodes when approaching bottom
-    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && self->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW &&
-        !self->nodesScrollLoadingMore) {
-
-        self->nodesScrollLoadingMore = true;
-
-        uint16_t new_limit = self->nodesScrollDisplayLimit + 15;
-        if (new_limit > MAX_NUM_NODES_VIEW) {
-            new_limit = MAX_NUM_NODES_VIEW;
-        }
-
-        self->nodesScrollDisplayLimit = new_limit;
-        self->updateNodesFiltered(false);
-
-        ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", self->nodesScrollDisplayLimit);
-
-        self->nodesScrollLoadingMore = false;
-    }
+    // Keep the virtual list window aligned with current scroll position.
+    // This deletes LVGL node panels outside the viewport buffer and recreates only what's needed.
+    self->refreshVirtualNodes(false);
 
     scroll_running = false;
 }
@@ -5832,9 +5817,51 @@ void TFTView_320x240::rebuildNodesFromData()
 
 void TFTView_320x240::reorderNodesFromData()
 {
+    // Keep the data model up to date.
     rebuildNodesFromData();
 
-    // build ordered list: ownNode first, then by lastHeard desc, then id
+    // Bump version so the virtual list knows order changed.
+    nodesOrderVersion++;
+
+    // If we're using virtualization, we don't keep one LVGL panel per node anymore.
+    // Just refresh visible rows.
+    refreshVirtualNodes(true);
+
+    nodesChanged = true;
+}
+
+/**
+ * @brief Virtualized nodes list:
+ * - Keeps scroll length using top/bottom spacer objects
+ * - Only materializes a small window of node panels around the viewport
+ * - Rebuilds visible rows quickly when sort order changes (instant lastHeard sorting)
+ */
+void TFTView_320x240::refreshVirtualNodes(bool force)
+{
+    if (!objects.nodes_panel)
+        return;
+
+    // Ensure spacers exist
+    if (!nodesSpacerTop) {
+        nodesSpacerTop = lv_obj_create(objects.nodes_panel);
+        lv_obj_set_width(nodesSpacerTop, LV_PCT(100));
+        lv_obj_set_height(nodesSpacerTop, 0);
+        lv_obj_clear_flag(nodesSpacerTop, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (!nodesSpacerBottom) {
+        nodesSpacerBottom = lv_obj_create(objects.nodes_panel);
+        lv_obj_set_width(nodesSpacerBottom, LV_PCT(100));
+        lv_obj_set_height(nodesSpacerBottom, 0);
+        lv_obj_clear_flag(nodesSpacerBottom, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+
+    // Build ordered list (instant last-heard sorting)
     std::vector<uint32_t> order;
     order.reserve(nodeData.size());
     for (auto &kv : nodeData) {
@@ -5847,25 +5874,94 @@ void TFTView_320x240::reorderNodesFromData()
             return false;
         const auto &ra = nodeData.at(a);
         const auto &rb = nodeData.at(b);
-        uint32_t la = ra.lastHeard;
-        uint32_t lb = rb.lastHeard;
-        if (la != lb)
-            return la > lb;
+        if (ra.lastHeard != rb.lastHeard)
+            return ra.lastHeard > rb.lastHeard;
         return a < b;
     });
 
-    // move panels to match order; keep start index at 1 to leave header intact
-    int idx = 1;
-    for (auto id : order) {
-        auto it = nodes.find(id);
-        if (it == nodes.end())
-            continue;
-        int maxIdx = objects.nodes_panel->spec_attr->child_cnt - 1;
-        int target = std::min(std::max(idx, 1), maxIdx);
-        lv_obj_move_to_index(it->second, target);
-        idx++;
+    // Determine viewport window
+    lv_coord_t scroll_y = lv_obj_get_scroll_y(objects.nodes_panel);
+    if (scroll_y < 0)
+        scroll_y = -scroll_y;
+    int firstVisible = (nodesRowHeight > 0) ? (scroll_y / nodesRowHeight) : 0;
+    int total = (int)order.size();
+
+    int wantFirst = std::max(0, firstVisible - (int)nodesVirtualBuffer);
+    int wantLast = std::min(total - 1, wantFirst + (int)nodesVirtualWindow - 1);
+    if (wantLast < wantFirst)
+        wantLast = wantFirst;
+
+    // Update spacer sizes to preserve full scroll height
+    lv_obj_set_height(nodesSpacerTop, wantFirst * nodesRowHeight);
+    int bottomCount = std::max(0, total - (wantLast + 1));
+    lv_obj_set_height(nodesSpacerBottom, bottomCount * nodesRowHeight);
+
+    // If forcing, drop all existing materialized node panels
+    if (force) {
+        for (auto &kv : nodes) {
+            if (kv.second)
+                lv_obj_delete(kv.second);
+        }
+        nodes.clear();
+        nodeCount = 0;
     }
-    nodesChanged = true;
+
+    // Materialize needed nodes, delete those outside window
+    std::set<uint32_t> needed;
+    for (int i = wantFirst; i <= wantLast && i < total; i++) {
+        needed.insert(order[i]);
+    }
+
+    // Delete panels that are not needed
+    for (auto it = nodes.begin(); it != nodes.end();) {
+        if (needed.find(it->first) == needed.end()) {
+            lv_obj_delete(it->second);
+            it = nodes.erase(it);
+            if (nodeCount > 0)
+                nodeCount--;
+        } else {
+            ++it;
+        }
+    }
+
+    // Ensure needed panels exist (insert between spacers)
+    // Move top spacer to index 0, bottom to end
+    lv_obj_move_to_index(nodesSpacerTop, 0);
+    lv_obj_move_to_index(nodesSpacerBottom, objects.nodes_panel->spec_attr->child_cnt - 1);
+
+    int insertIdx = 1;
+    for (int i = wantFirst; i <= wantLast && i < total; i++) {
+        uint32_t nodeNum = order[i];
+        if (nodes.find(nodeNum) == nodes.end()) {
+            auto nd = nodeData.find(nodeNum);
+            if (nd == nodeData.end())
+                continue;
+            NodeRecord &rec = nd->second;
+
+            // Fallbacks
+            const char *shortName = rec.shortName.empty() ? "" : rec.shortName.c_str();
+            const char *longName = rec.longName.empty() ? "" : rec.longName.c_str();
+            char shortBuf[8] = {};
+            char longBuf[32] = {};
+            if (!shortName[0]) {
+                sprintf(shortBuf, "%04x", nodeNum & 0xffff);
+                shortName = shortBuf;
+            }
+            if (!longName[0]) {
+                snprintf(longBuf, sizeof(longBuf), "Node %s", shortName);
+                longName = longBuf;
+            }
+
+            addNode(nodeNum, rec.channel, shortName, longName, rec.lastHeard, rec.role, rec.hasKey, rec.isUnmessagable);
+        }
+
+        // Place the node panel between spacers in sorted order
+        auto it = nodes.find(nodeNum);
+        if (it != nodes.end()) {
+            lv_obj_move_to_index(it->second, insertIdx);
+            insertIdx++;
+        }
+    }
 }
 
 void TFTView_320x240::messageAlert(const char *alert, bool show)
