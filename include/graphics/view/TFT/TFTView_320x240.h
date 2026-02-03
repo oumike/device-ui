@@ -247,8 +247,10 @@ class TFTView_320x240 : public MeshtasticView
     // Virtual nodes list state
     lv_obj_t *nodesSpacerTop = nullptr;
     lv_obj_t *nodesSpacerBottom = nullptr;
-    uint16_t nodesVirtualWindow = 24; // how many node panels to keep alive
-    uint16_t nodesVirtualBuffer = 6;  // extra rows above/below viewport
+    // T-Deck shows ~3-4 nodes. Keep a small window for speed.
+    // "5 ahead and 5 behind" => buffer=5, window=11 (approx).
+    uint16_t nodesVirtualWindow = 11; // total node panels to keep alive
+    uint16_t nodesVirtualBuffer = 5;  // extra rows above/below viewport
     lv_coord_t nodesRowHeight = 53;   // must match NodePanel height
     uint32_t nodesOrderVersion = 0;
     void updateStatistics(const meshtastic_MeshPacket &p);
