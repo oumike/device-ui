@@ -4841,7 +4841,9 @@ void TFTView_320x240::addOrUpdateNode(uint32_t nodeNum, uint8_t channel, uint32_
         updateNode(nodeNum, channel, cfg);
     }
 
-    reorderNodesFromData();
+    // Debounce sorting to avoid resorting 200x per second when packets stream in.
+    nodesResortPending = true;
+    nextNodesResortMs = millis() + 150;
     updateNodesStatus();
 }
 
@@ -5959,6 +5961,20 @@ void TFTView_320x240::refreshVirtualNodes(bool force)
         auto it = nodes.find(nodeNum);
         if (it != nodes.end()) {
             lv_obj_move_to_index(it->second, insertIdx);
+
+            // Update only if changed (avoid LVGL churn)
+            auto nd = nodeData.find(nodeNum);
+            if (nd != nodeData.end()) {
+                NodeRecord &rec = nd->second;
+                uint32_t currentLH = (unsigned long)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+                if (rec.lastHeard != 0 && rec.lastHeard != currentLH) {
+                    it->second->LV_OBJ_IDX(node_lh_idx)->user_data = (void *)(unsigned long)rec.lastHeard;
+                    char buf[32];
+                    lastHeardToString((time_t)rec.lastHeard, buf);
+                    lv_label_set_text(it->second->LV_OBJ_IDX(node_lh_idx), buf);
+                }
+            }
+
             insertIdx++;
         }
     }
@@ -7403,14 +7419,10 @@ void TFTView_320x240::updateLastHeard(uint32_t nodeNum)
                 applyNodesFilter(nodeNum);
                 updateNodesStatus();
             }
-            // move to top position
-            lv_obj_move_to_index(it->second, 1);
-
-            // re-arrange the group linked list i.e. move the node after the top position
-            lv_ll_t *lv_group_ll = &lv_group_get_default()->obj_ll;
-            void *act = it->second->LV_OBJ_IDX(node_btn_idx)->user_data;
-            if (lv_group_ll && act)
-                _lv_ll_move_before(lv_group_ll, act, _lv_ll_get_next(lv_group_ll, topNodeLL));
+            // With virtualized nodes list we don't "move to top" directly.
+            // Debounce a resort instead.
+            nodesResortPending = true;
+            nextNodesResortMs = millis() + 150;
         }
     }
 }
@@ -7697,6 +7709,21 @@ void TFTView_320x240::task_handler(void)
                 }
             }
         }
+        // Nodes page performance:
+        // (1) debounce resort to avoid full re-sort on every incoming packet
+        // (2) refresh visible rows on a short cycle (only visible LVGL objects)
+        if (activePanel == objects.nodes_panel) {
+            uint32_t nowMs = millis();
+            if (nodesResortPending && nowMs >= nextNodesResortMs) {
+                nodesResortPending = false;
+                reorderNodesFromData();
+            }
+            if (nowMs >= nextNodesUIRefreshMs) {
+                nextNodesUIRefreshMs = nowMs + 200;
+                refreshVirtualNodes(false);
+            }
+        }
+
         if (processingFilter || nodesChanged) {
             updateNodesFiltered(nodesChanged);
         }

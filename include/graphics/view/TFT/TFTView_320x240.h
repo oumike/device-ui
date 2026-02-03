@@ -253,6 +253,12 @@ class TFTView_320x240 : public MeshtasticView
     uint16_t nodesVirtualBuffer = 5;  // extra rows above/below viewport
     lv_coord_t nodesRowHeight = 53;   // must match NodePanel height
     uint32_t nodesOrderVersion = 0;
+
+    // Debounce resort/refresh to reduce CPU churn.
+    // (We still get "instant" feel by refreshing at a fast cadence.)
+    bool nodesResortPending = false;
+    uint32_t nextNodesResortMs = 0;
+    uint32_t nextNodesUIRefreshMs = 0;
     void updateStatistics(const meshtastic_MeshPacket &p);
     void updateSignalStrength(int32_t rssi, float snr);
     int32_t signalStrength2Percent(int32_t rx_rssi, float rx_snr);
