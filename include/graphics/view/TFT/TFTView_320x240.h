@@ -232,9 +232,33 @@ class TFTView_320x240 : public MeshtasticView
     void handleTraceRouteResponse(const meshtastic_Routing &routing);
     void addNodeToTraceRoute(uint32_t nodeNum, lv_obj_t *panel);
     void purgeNode(uint32_t nodeNum);
+
+    // miles-edition: node list data-model helpers
+    void rebuildNodesFromData();
+    void reorderNodesFromData();
+
+    // Virtualized nodes list (row recycling via spacers)
+    void refreshVirtualNodes(bool force = false);
+
     void removeSpinner(void);
     void packetDetected(const meshtastic_MeshPacket &p);
     void writePacketLog(const meshtastic_MeshPacket &p);
+
+    // Virtual nodes list state
+    lv_obj_t *nodesSpacerTop = nullptr;
+    lv_obj_t *nodesSpacerBottom = nullptr;
+    // T-Deck shows ~3-4 nodes. Keep a small window for speed.
+    // "5 ahead and 5 behind" => buffer=5, window=11 (approx).
+    uint16_t nodesVirtualWindow = 11; // total node panels to keep alive
+    uint16_t nodesVirtualBuffer = 5;  // extra rows above/below viewport
+    lv_coord_t nodesRowHeight = 53;   // must match NodePanel height
+    uint32_t nodesOrderVersion = 0;
+
+    // Debounce resort/refresh to reduce CPU churn.
+    // (We still get "instant" feel by refreshing at a fast cadence.)
+    bool nodesResortPending = false;
+    uint32_t nextNodesResortMs = 0;
+    uint32_t nextNodesUIRefreshMs = 0;
     void updateStatistics(const meshtastic_MeshPacket &p);
     void updateSignalStrength(int32_t rssi, float snr);
     int32_t signalStrength2Percent(int32_t rx_rssi, float rx_snr);

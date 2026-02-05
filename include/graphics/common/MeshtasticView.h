@@ -11,6 +11,7 @@
 #include <string>
 #include <time.h>
 #include <unordered_map>
+#include <utility>
 
 #define LV_OBJ_IDX(x) spec_attr->children[x]
 
@@ -152,12 +153,53 @@ class MeshtasticView : public DeviceGUI
     // local update methods
     virtual void updateLastHeard(uint32_t nodeNum);
     virtual void updateTime(uint32_t time) {}
+    virtual void rebuildNodesFromData() {}
+    virtual void reorderNodesFromData() {}
 
   protected:
     struct PSK {
         uint32_t size;
         uint8_t bytes[32];
     };
+
+    struct NodeRecord {
+        uint32_t id = 0;
+        uint8_t channel = 0;
+        std::string shortName;
+        std::string longName;
+        uint32_t lastHeard = 0;
+        eRole role = eRole::unknown;
+        bool hasKey = false;
+        bool viaMqtt = false;
+        bool isUnmessagable = false;
+        bool hasUser = false;
+
+        // position/telemetry
+        int32_t lat = 0;
+        int32_t lon = 0;
+        int32_t alt = 0;
+        uint32_t sats = 0;
+        uint32_t precision = 0;
+        bool hasPosition = false;
+        uint8_t hopsAway = 0;
+
+        uint32_t batLevel = 0;
+        float voltage = 0.0f;
+        float chUtil = 0.0f;
+        float airUtil = 0.0f;
+    };
+
+    NodeRecord &getOrCreateNodeRecord(uint32_t nodeNum)
+    {
+        auto it = nodeData.find(nodeNum);
+        if (it == nodeData.end()) {
+            NodeRecord rec{};
+            rec.id = nodeNum;
+            auto [pos, _] = nodeData.emplace(nodeNum, std::move(rec));
+            return pos->second;
+        }
+        return it->second;
+    }
 
     // helpers
     std::tuple<uint32_t, uint32_t> nodeColor(uint32_t nodeNum);
@@ -168,6 +210,7 @@ class MeshtasticView : public DeviceGUI
 
     ViewController *controller;
     ResponseHandler requests;
+    std::unordered_map<uint32_t, NodeRecord> nodeData;    // node state (source of truth)
     std::unordered_map<uint32_t, lv_obj_t *> nodes;       // node panels
     std::unordered_map<uint32_t, lv_obj_t *> messages;    // message containers (within ui_MessagesPanel)
     std::unordered_map<uint32_t, lv_obj_t *> chats;       // active chats (within ui_ChatPanel)
