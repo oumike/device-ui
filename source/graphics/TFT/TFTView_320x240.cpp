@@ -28,6 +28,7 @@
 #include <random>
 #include <sstream>
 #include <time.h>
+#include <vector>
 
 #if defined(ARCH_PORTDUINO)
 #include "PortduinoFS.h"
@@ -5637,7 +5638,11 @@ void TFTView_320x240::purgeNode(uint32_t nodeNum)
  */
 bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
 {
-    lv_obj_t *panel = nodes[nodeNum];
+    auto itPanel = nodes.find(nodeNum);
+    if (itPanel == nodes.end() || itPanel->second == nullptr) {
+        return false;
+    }
+    lv_obj_t *panel = itPanel->second;
     auto nd = nodeData.find(nodeNum);
     const NodeRecord *rec = (nd != nodeData.end()) ? &nd->second : nullptr;
 
@@ -7371,38 +7376,43 @@ void TFTView_320x240::updateNodesStatus(void)
  */
 void TFTView_320x240::updateNodesFiltered(bool reset)
 {
-    static auto it = nodes.begin();
+    static std::vector<uint32_t> nodeOrder;
+    static size_t idx = 0;
     static uint16_t processedCount = 0; // Track how many nodes we've processed in current session
 
     if (reset || nodesChanged) {
+        nodeOrder.clear();
+        nodeOrder.reserve(nodes.size());
+        for (const auto &kv : nodes) {
+            if (kv.second) {
+                nodeOrder.push_back(kv.first);
+            }
+        }
+        idx = 0;
+        processedCount = 0;
         nodesFiltered = 0;
         nodesChanged = false;
         processingFilter = true;
-        it = nodes.begin();
-        processedCount = 0;
     }
 
     // Process nodes in batches of 10, but respect the display limit for infinite scroll
     uint16_t batchSize = 10;
     uint16_t processLimit = nodesScrollDisplayLimit; // Limit based on infinite scroll display count
 
-    for (int i = 0; i < batchSize && it != nodes.end() && processedCount < processLimit; i++) {
-        applyNodesFilter(it->first, true);
-        it++;
+    int processed = 0;
+    while (idx < nodeOrder.size() && processed < batchSize && processedCount < processLimit) {
+        applyNodesFilter(nodeOrder[idx], true);
+        idx++;
+        processed++;
         processedCount++;
     }
 
-    if (it == nodes.end() || processedCount >= processLimit) {
+    if (idx >= nodeOrder.size() || processedCount >= processLimit) {
         processingFilter = false;
     }
     updateNodesStatus();
 }
 
-/**
- * @brief Update last heard display/user_data/counter to current time
- *
- * @param nodeNum
- */
 void TFTView_320x240::updateLastHeard(uint32_t nodeNum)
 {
     auto it = nodes.find(nodeNum);
