@@ -93,88 +93,88 @@ enum ThemeColor {
     eTableCellBorder
 };
 
-uint32_t themeColor[][2] = {
-    // dark,       light
-    {0xff303030, 0xfff4f4f4}, // eMainScreenStyle
-    {0xff436C70, 0xff67ea94}, // eTopPanelBg
-    {0xffE0E0E0, 0xff212121}, // eTopPanelText
-    {0xff436C70, 0xff67ea94}, // eTopImageBg
-    {0xffffffff, 0xff212121}, // eTopImageRecolor
-    {255, 255},               // eTopImageRecolorOpa
-    {0xffffffff, 0xff212121}, // ePositiveImageRecolor,
-    {0xff303030, 0xfff4f4f0}, // ePanelBg
-    {0xff303030, 0xfffafafa}, // ePanelPressedBg
-    {0xfff0f0f0, 0xff212121}, // ePanelText
-    {0xff67ea94, 0xff67ea94}, // ePanelBorder
-    {0xff404040, 0xffffffff}, // eNodePanelBg
-    {0xff808080, 0xff979797}, // eNodePanelBorder
-    {0xfff0f0f0, 0xff212121}, // eNodePanelText
-    {0xff404040, 0xffffffff}, // eNodeButtonBg
-    {0, 0},                   // eNodeButtonBgOpa
-    {0xff585858, 0xffffffff}, // eButtonPanelBg
-    {0xff585858, 0xffeaeae0}, // eMainButtonBg
-    {0xffaafbff, 0xff101010}, // eMainButtonText
-    {0xff67ea94, 0xff67ea94}, // eMainButtonBorder
-    {0xff9e9e9e, 0xffc0c0c0}, // eMainButtonShadow
-    {0xff67ea94, 0xff757575}, // eMainButtonImageRecolor
-    {0, 255},                 // eMainButtonImageRecolorOpa
-    {0xff303030, 0xfffafaf4}, // eHomeContainerBg
-    {0xff67EA94, 0xffaaaaaa}, // eHomeContainerBorder
-    {0xff2B824A, 0xff999999}, // eHomeContainerShadow
-    {0xffaafbff, 0xff294337}, // eHomeContainerText
-    {0xff303030, 0xffffffff}, // eHomeButtonBg
-    {0xffffffff, 0xff101010}, // eHomeButtonText
-    {0xff303030, 0xffd0d0d0}, // eHomeButtonBorder
-    {0xff606060, 0xff57a6b3}, // eHomeButtonImageRecolor
-    {0, 255},                 // eHomeButtonImageRecolorOpa
-    {0xff404040, 0xfffafaf4}, // eChannelButtonBg
-    {0xffA0A0A0, 0xffD0D0D0}, // eChannelButtonBorder
-    {0xffffffff, 0xff101010}, // eChannelButtonText
-    {0xff303030, 0xfff0f0f0}, // eSettingsPanelBg
-    {0xffaafbff, 0xff003c9f}, // eSettingsPanelText
-    {0, 0xff979797},          // eSettingsPanelBorder
-    {0, 0xff7e7e7e},          // eSettingsPanelShadow
-    {250, 250},               // eSettingsPanelBgOpa
-    {0xff505050, 0xffeaeae0}, // eSettingsButtonBg
-    {0xffaafbff, 0xff294337}, // eSettingsButtonText
-    {0xff303030, 0xffd0d0d0}, // eSettingsButtonBorder
-    {0, 0xff67ea94},          // eSettingsButtonImageRecolor
-    {0, 255},                 // eSettingsButtonImageRecolorOpa
-    {0xff404040, 0xffffffff}, // eSettingsLabelBg
-    {0xff404040, 0xff808080}, // eSettingsLabelBorder
-    {0xff303030, 0xfff4f4f4}, // eTabViewBg
-    {0xffaafbff, 0xff003c9f}, // eTabViewText
-    {0xff303030, 0xffe0e0e0}, // eTabButtonDefaultBg
-    {0xff303030, 0xffffffff}, // eTabButtonActiveBg
-    {0xff67ea94, 0xffaafbff}, // eTabButtonPressedBg
-    {0xffA0A0A0, 0xff606060}, // eTabButtonDefaultText
-    {0xffffffff, 0xff101010}, // eTabButtonActiveText
-    {0xffffffff, 0xffffffff}, // eTabButtonPressedText
-    {0xff505050, 0xffb0b0b0}, // eTabButtonDefaultBorder
-    {0xff303030, 0xfffbfce9}, // eChatMessageBg
-    {255, 255},               // eChatMessageBgOpa
-    {0xffffffff, 0xff294337}, // eChatMessageText
-    {0xff707070, 0xff888888}, // eChatMessageBorder
-    {0xff404040, 0xffffffff}, // eNewMessageBg
-    {255, 255},               // eNewMessageBgOpa
-    {0xffd0d0d0, 0xff294337}, // eNewMessageText
-    {0xff808080, 0xff888888}, // eNewMessageBorder
-    {0xff303030, 0xfffbfbfb}, // eAlertPanelBg
-    {0xff303030, 0xfff4f4f4}, // eBtnMatrixBorderMain
-    {0xff67ea94, 0xff67ea94}, // eBtnMatrixBorderItems
-    {0xff606060, 0xfffffff8}, // eBtnMatrixBgItems
-    {0xffaafbff, 0xff212121}, // eBtnMatrixTextItems
-    {0xffaafbff, 0xff212121}, // eBatteryPercentageText
-    {0xffaafbff, 0xff003c9f}, // eColorTextLabel
-    {0xff404040, 0xffe0e0e0}, // eSpinnerMainArc
-    {0xff67ea94, 0xff67ea94}, // eSpinnerIndicatorArc
-    {0xffaafbff, 0xff212121}, // eTableHeadingText,
-    {0xff303030, 0xfff4f4f0}, // eTableHeadingBg
-    {0xffaafbff, 0xff212121}, // eTableItemText,
-    {0xff505050, 0xfff4f4f0}, // eTableItemBg
-    {0xff303030, 0xffd4d4d0}, // eTableItemDarkBg
-    {0xff404040, 0xffe0e0e0}, // eTableBorder
-    {0xff404040, 0xffe0e0e0}  // eTableCellBorder
+uint32_t themeColor[][4] = {
+    // dark,       light,      earth (brown-based), grey (grey/black)
+    {0xff303030, 0xfff4f4f4, 0xff2a1f1a, 0xff1a1a1a}, // eMainScreenStyle
+    {0xff436C70, 0xff67ea94, 0xff5c4033, 0xff404040}, // eTopPanelBg
+    {0xffE0E0E0, 0xff212121, 0xffe8d5b7, 0xffd0d0d0}, // eTopPanelText
+    {0xff436C70, 0xff67ea94, 0xff5c4033, 0xff404040}, // eTopImageBg
+    {0xffffffff, 0xff212121, 0xffd4a76a, 0xffc0c0c0}, // eTopImageRecolor
+    {255, 255, 255, 255},                             // eTopImageRecolorOpa
+    {0xffffffff, 0xff212121, 0xff8b9f6e, 0xffa0a0a0}, // ePositiveImageRecolor,
+    {0xff303030, 0xfff4f4f0, 0xff3d2817, 0xff2a2a2a}, // ePanelBg
+    {0xff303030, 0xfffafafa, 0xff4a3425, 0xff353535}, // ePanelPressedBg
+    {0xfff0f0f0, 0xff212121, 0xffe8d5b7, 0xffd0d0d0}, // ePanelText
+    {0xff67ea94, 0xff67ea94, 0xff8b7355, 0xff808080}, // ePanelBorder
+    {0xff404040, 0xffffffff, 0xff4a3425, 0xff353535}, // eNodePanelBg
+    {0xff808080, 0xff979797, 0xff8b7355, 0xff606060}, // eNodePanelBorder
+    {0xfff0f0f0, 0xff212121, 0xffd4bd96, 0xffc0c0c0}, // eNodePanelText
+    {0xff404040, 0xffffffff, 0xff4a3425, 0xff353535}, // eNodeButtonBg
+    {0, 0, 0, 0},                                     // eNodeButtonBgOpa
+    {0xff585858, 0xffffffff, 0xff2a1f1a, 0xff252525}, // eButtonPanelBg
+    {0xff585858, 0xffeaeae0, 0xff6b4e3d, 0xff505050}, // eMainButtonBg
+    {0xffaafbff, 0xff101010, 0xfff4e4c1, 0xffe0e0e0}, // eMainButtonText
+    {0xff67ea94, 0xff67ea94, 0xff8b7355, 0xff808080}, // eMainButtonBorder
+    {0xff9e9e9e, 0xffc0c0c0, 0xff5c4033, 0xff404040}, // eMainButtonShadow
+    {0xff67ea94, 0xff757575, 0xffb8956a, 0xff909090}, // eMainButtonImageRecolor
+    {0, 255, 255, 0},                                 // eMainButtonImageRecolorOpa
+    {0xff303030, 0xfffafaf4, 0xff3d2817, 0xff2a2a2a}, // eHomeContainerBg
+    {0xff67EA94, 0xffaaaaaa, 0xff9b8060, 0xff707070}, // eHomeContainerBorder
+    {0xff2B824A, 0xff999999, 0xff6b4e3d, 0xff404040}, // eHomeContainerShadow
+    {0xffaafbff, 0xff294337, 0xffe6b86e, 0xffc0c0c0}, // eHomeContainerText
+    {0xff303030, 0xffffffff, 0xff4a3425, 0xff353535}, // eHomeButtonBg
+    {0xffffffff, 0xff101010, 0xfff0ddb0, 0xffe0e0e0}, // eHomeButtonText
+    {0xff303030, 0xffd0d0d0, 0xff6b4e3d, 0xff505050}, // eHomeButtonBorder
+    {0xff606060, 0xff57a6b3, 0xffc9a87c, 0xff808080}, // eHomeButtonImageRecolor
+    {0, 255, 255, 0},                                 // eHomeButtonImageRecolorOpa
+    {0xff404040, 0xfffafaf4, 0xff3d2817, 0xff353535}, // eChannelButtonBg
+    {0xffA0A0A0, 0xffD0D0D0, 0xff9b8060, 0xff707070}, // eChannelButtonBorder
+    {0xffffffff, 0xff101010, 0xffe8d5b7, 0xffd0d0d0}, // eChannelButtonText
+    {0xff303030, 0xfff0f0f0, 0xff4a3425, 0xff353535}, // eSettingsPanelBg
+    {0xffaafbff, 0xff003c9f, 0xffd4bd96, 0xffc0c0c0}, // eSettingsPanelText
+    {0, 0xff979797, 0xff8b7355, 0xff606060},          // eSettingsPanelBorder
+    {0, 0xff7e7e7e, 0xff2a1f1a, 0xff303030},          // eSettingsPanelShadow
+    {250, 250, 250, 250},                             // eSettingsPanelBgOpa
+    {0xff505050, 0xffeaeae0, 0xff6b4e3d, 0xff454545}, // eSettingsButtonBg
+    {0xffaafbff, 0xff294337, 0xfff0ddb0, 0xffd0d0d0}, // eSettingsButtonText
+    {0xff303030, 0xffd0d0d0, 0xff8b7355, 0xff606060}, // eSettingsButtonBorder
+    {0, 0xff67ea94, 0xffc96e3f, 0xff808080},          // eSettingsButtonImageRecolor
+    {0, 255, 255, 0},                                 // eSettingsButtonImageRecolorOpa
+    {0xff404040, 0xffffffff, 0xff4a3425, 0xff404040}, // eSettingsLabelBg
+    {0xff404040, 0xff808080, 0xff8b7355, 0xff606060}, // eSettingsLabelBorder
+    {0xff303030, 0xfff4f4f4, 0xff2a1f1a, 0xff1a1a1a}, // eTabViewBg
+    {0xffaafbff, 0xff003c9f, 0xffd4a76a, 0xffc0c0c0}, // eTabViewText
+    {0xff303030, 0xffe0e0e0, 0xff3d2817, 0xff2a2a2a}, // eTabButtonDefaultBg
+    {0xff303030, 0xffffffff, 0xff6b4e3d, 0xff505050}, // eTabButtonActiveBg
+    {0xff67ea94, 0xffaafbff, 0xffc96e3f, 0xff909090}, // eTabButtonPressedBg
+    {0xffA0A0A0, 0xff606060, 0xffa89070, 0xff808080}, // eTabButtonDefaultText
+    {0xffffffff, 0xff101010, 0xfff4e4c1, 0xffe0e0e0}, // eTabButtonActiveText
+    {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff}, // eTabButtonPressedText
+    {0xff505050, 0xffb0b0b0, 0xff8b7355, 0xff606060}, // eTabButtonDefaultBorder
+    {0xff303030, 0xfffbfce9, 0xff4a3425, 0xff353535}, // eChatMessageBg
+    {255, 255, 255, 255},                             // eChatMessageBgOpa
+    {0xffffffff, 0xff294337, 0xfff0ddb0, 0xffd0d0d0}, // eChatMessageText
+    {0xff707070, 0xff888888, 0xff8b7355, 0xff606060}, // eChatMessageBorder
+    {0xff404040, 0xffffffff, 0xff3d2817, 0xff404040}, // eNewMessageBg
+    {255, 255, 255, 255},                             // eNewMessageBgOpa
+    {0xffd0d0d0, 0xff294337, 0xffd4bd96, 0xffb0b0b0}, // eNewMessageText
+    {0xff808080, 0xff888888, 0xff9b8060, 0xff707070}, // eNewMessageBorder
+    {0xff303030, 0xfffbfbfb, 0xff2a1f1a, 0xff252525}, // eAlertPanelBg
+    {0xff303030, 0xfff4f4f4, 0xff3d2817, 0xff2a2a2a}, // eBtnMatrixBorderMain
+    {0xff67ea94, 0xff67ea94, 0xff8b7355, 0xff808080}, // eBtnMatrixBorderItems
+    {0xff606060, 0xfffffff8, 0xff4a3425, 0xff454545}, // eBtnMatrixBgItems
+    {0xffaafbff, 0xff212121, 0xffe8d5b7, 0xffd0d0d0}, // eBtnMatrixTextItems
+    {0xffaafbff, 0xff212121, 0xffd4a76a, 0xffc0c0c0}, // eBatteryPercentageText
+    {0xffaafbff, 0xff003c9f, 0xffe6b86e, 0xffc0c0c0}, // eColorTextLabel
+    {0xff404040, 0xffe0e0e0, 0xff3d2817, 0xff353535}, // eSpinnerMainArc
+    {0xff67ea94, 0xff67ea94, 0xffc96e3f, 0xff808080}, // eSpinnerIndicatorArc
+    {0xffaafbff, 0xff212121, 0xffe6b86e, 0xffc0c0c0}, // eTableHeadingText,
+    {0xff303030, 0xfff4f4f0, 0xff4a3425, 0xff353535}, // eTableHeadingBg
+    {0xffaafbff, 0xff212121, 0xffe8d5b7, 0xffd0d0d0}, // eTableItemText,
+    {0xff505050, 0xfff4f4f0, 0xff5c4033, 0xff404040}, // eTableItemBg
+    {0xff303030, 0xffd4d4d0, 0xff3d2817, 0xff2a2a2a}, // eTableItemDarkBg
+    {0xff404040, 0xffe0e0e0, 0xff8b7355, 0xff606060}, // eTableBorder
+    {0xff404040, 0xffe0e0e0, 0xff8b7355, 0xff606060}  // eTableCellBorder
 };
 
 #include "fonts.h"
@@ -458,6 +458,12 @@ void Themes::recolorButton(lv_obj_t *obj, bool enabled, lv_opa_t opa)
     case eDark:
         color = enabled ? lv_color_hex(0xffe0e0e0) : lv_color_hex(0xff606060);
         break;
+    case eNeon:
+        color = enabled ? lv_color_hex(0xffd4a76a) : lv_color_hex(0xff6b4e3d);
+        break;
+    case eGrey:
+        color = enabled ? lv_color_hex(0xffc0c0c0) : lv_color_hex(0xff505050);
+        break;
     default:
         break;
     }
@@ -475,6 +481,12 @@ void Themes::recolorImage(lv_obj_t *obj, bool enabled)
     case eDark:
         color = enabled ? lv_color_hex(0xffe0e0e0) : lv_color_hex(0xff606060);
         break;
+    case eNeon:
+        color = enabled ? lv_color_hex(0xffe6b86e) : lv_color_hex(0xff6b4e3d);
+        break;
+    case eGrey:
+        color = enabled ? lv_color_hex(0xffc0c0c0) : lv_color_hex(0xff505050);
+        break;
     default:
         break;
     }
@@ -491,6 +503,12 @@ void Themes::recolorText(lv_obj_t *obj, bool enabled)
     case eDark:
         color = enabled ? lv_color_hex(THEME(eHomeContainerText)) : lv_color_hex(0xff606060);
         break;
+    case eNeon:
+        color = enabled ? lv_color_hex(0xffe6b86e) : lv_color_hex(0xff8b7355);
+        break;
+    case eGrey:
+        color = enabled ? lv_color_hex(0xffc0c0c0) : lv_color_hex(0xff606060);
+        break;
     default:
         break;
     }
@@ -505,6 +523,12 @@ void Themes::recolorTopLabel(lv_obj_t *obj, bool alert)
         color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
         break;
     case eDark:
+        color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
+        break;
+    case eNeon:
+        color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
+        break;
+    case eGrey:
         color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
         break;
     default:

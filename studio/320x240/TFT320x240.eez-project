@@ -14031,7 +14031,7 @@
                     }
                   },
                   "groupIndex": 0,
-                  "options": "Dark\nLight",
+                  "options": "Dark\nLight\nEarth\nGrey",
                   "optionsType": "translated-literal",
                   "selected": 0,
                   "selectedType": "literal",
