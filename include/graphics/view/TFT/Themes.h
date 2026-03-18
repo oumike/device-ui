@@ -4,7 +4,7 @@
 class Themes
 {
   public:
-    enum Theme { eDark, eLight, eNeon, eGrey, eDarkBlue };
+    enum Theme { eDark, eLight, eNeon, eGrey, eDarkBlue, eSoft, eSolarizedDark, eSolarizedLight };
 
     static void initStyles(void);
     static enum Theme get(void);

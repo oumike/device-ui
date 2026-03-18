@@ -3869,13 +3869,12 @@ void create_screen_main_screen() {
             lv_obj_set_style_layout(obj, LV_LAYOUT_NONE, LV_PART_MAIN | LV_STATE_DEFAULT);
             {
                 lv_obj_t *parent_obj = obj;
-                {
-                    // SettingsThemeDropdown
+                {                    // SettingsThemeDropdown
                     lv_obj_t *obj = lv_dropdown_create(parent_obj);
                     objects.settings_theme_dropdown = obj;
                     lv_obj_set_pos(obj, 0, 0);
                     lv_obj_set_size(obj, 150, 30);
-                    lv_dropdown_set_options(obj, _("Dark\nLight\nEarth\nGrey"));
+                    lv_dropdown_set_options(obj, _("Dark\nLight\nEarth\nGrey\nDark Blue\nSoft\nSolarized Dark\nSolarized Light"));
                     add_style_drop_down_style(obj);
                     lv_obj_set_style_align(obj, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
                     lv_obj_set_style_border_color(obj, lv_color_hex(0xffe0e0e0), LV_PART_MAIN | LV_STATE_DEFAULT);

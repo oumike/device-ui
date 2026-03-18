@@ -14031,7 +14031,7 @@
                     }
                   },
                   "groupIndex": 0,
-                  "options": "Dark\nLight\nEarth\nGrey",
+                  "options": "Dark\nLight\nEarth\nGrey\nDark Blue\nSoft\nSolarized Dark\nSolarized Light",
                   "optionsType": "translated-literal",
                   "selected": 0,
                   "selectedType": "literal",
