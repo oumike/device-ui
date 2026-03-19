@@ -145,12 +145,12 @@ uint32_t themeColor[][8] = {
     {0xff404040, 0xff808080, 0xff8b7355, 0xff606060, 0xff4a6575, 0xffc9baa5, 0xff586e75, 0xffb8a888}, // eSettingsLabelBorder
     {0xff303030, 0xfff4f4f4, 0xff2a1f1a, 0xff1a1a1a, 0xff0a1520, 0xfff5efe5, 0xff002b36, 0xfffdf6e3}, // eTabViewBg
     {0xffffffff, 0xff003c9f, 0xffd4a76a, 0xffc0c0c0, 0xffc0d0dc, 0xff5a5045, 0xff93a1a1, 0xff586e75}, // eTabViewText
-    {0xff303030, 0xffe0e0e0, 0xff3d2817, 0xff2a2a2a, 0xff253545, 0xffe8e0d0, 0xff073642, 0xffe8dfd0}, // eTabButtonDefaultBg
-    {0xff303030, 0xffffffff, 0xff6b4e3d, 0xff505050, 0xffc0d4e0, 0xfffaf6f0, 0xff002b36, 0xfffdf6e3}, // eTabButtonActiveBg
-    {0xff67ea94, 0xffaafbff, 0xffc96e3f, 0xff909090, 0xff3a5565, 0xffa9b598, 0xff268bd2, 0xff859900}, // eTabButtonPressedBg
-    {0xffA0A0A0, 0xff606060, 0xffa89070, 0xff808080, 0xff6a9aaa, 0xff7a7065, 0xff839496, 0xff93a1a1}, // eTabButtonDefaultText
+    {0xff303030, 0xffe0e0e0, 0xff3d2817, 0xff2a2a2a, 0xff2a4555, 0xffe8e0d0, 0xff073642, 0xffe8dfd0}, // eTabButtonDefaultBg
+    {0xff303030, 0xffffffff, 0xff6b4e3d, 0xff505050, 0xff0f1a28, 0xfffaf6f0, 0xff002b36, 0xfffdf6e3}, // eTabButtonActiveBg
+    {0xff67ea94, 0xffaafbff, 0xffc96e3f, 0xff909090, 0xff1a2a3a, 0xffa9b598, 0xff268bd2, 0xff859900}, // eTabButtonPressedBg
+    {0xffA0A0A0, 0xff606060, 0xffa89070, 0xff808080, 0xff8ab4c4, 0xff7a7065, 0xff839496, 0xff93a1a1}, // eTabButtonDefaultText
     {0xffffffff, 0xff101010, 0xfff4e4c1, 0xffe0e0e0, 0xffc0d0dc, 0xff3a3025, 0xff93a1a1, 0xff586e75}, // eTabButtonActiveText
-    {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xff1f3545, 0xff5a5045, 0xff93a1a1, 0xff586e75}, // eTabButtonPressedText
+    {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff, 0xffc0d0dc, 0xff5a5045, 0xff93a1a1, 0xff586e75}, // eTabButtonPressedText
     {0xff505050, 0xffb0b0b0, 0xff8b7355, 0xff606060, 0xff4a6575, 0xffc9baa5, 0xff586e75, 0xffb8a888}, // eTabButtonDefaultBorder
     {0xff303030, 0xfffbfce9, 0xff4a3425, 0xff353535, 0xff1a2332, 0xfff0ebe0, 0xff073642, 0xffeee8d5}, // eChatMessageBg
     {255, 255, 255, 255, 255, 255, 255, 255},                                                         // eChatMessageBgOpa
@@ -434,7 +434,7 @@ void Themes::initStyles(void)
     lv_style_set_text_color(&style_btn_active, lv_color_hex(THEME(eTabButtonActiveText)));
     lv_style_set_bg_color(&style_btn_active, lv_color_hex(THEME(eTabButtonActiveBg)));
     lv_style_set_bg_opa(&style_btn_active, LV_OPA_COVER);
-    lv_style_set_border_color(&style_btn_active, lv_color_hex(0xff67ea94));
+    lv_style_set_border_color(&style_btn_active, lv_color_hex(THEME(ePanelBorder)));
     lv_style_set_border_opa(&style_btn_active, LV_OPA_COVER);
     lv_style_set_border_width(&style_btn_active, 3);
     lv_style_set_border_side(&style_btn_active, LV_BORDER_SIDE_BOTTOM);
@@ -443,7 +443,7 @@ void Themes::initStyles(void)
     lv_style_set_text_color(&style_btn_pressed, lv_color_hex(THEME(eTabButtonPressedText)));
     lv_style_set_bg_color(&style_btn_pressed, lv_color_hex(THEME(eTabButtonPressedBg)));
     lv_style_set_bg_opa(&style_btn_pressed, LV_OPA_COVER);
-    lv_style_set_border_color(&style_btn_pressed, lv_color_hex(0xff67ea94));
+    lv_style_set_border_color(&style_btn_pressed, lv_color_hex(THEME(ePanelBorder)));
     lv_style_set_border_opa(&style_btn_pressed, LV_OPA_COVER);
     lv_style_set_border_width(&style_btn_pressed, 3);
     lv_style_set_border_side(&style_btn_pressed, LV_BORDER_SIDE_BOTTOM);
