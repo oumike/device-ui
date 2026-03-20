@@ -459,7 +459,7 @@ void Themes::recolorButton(lv_obj_t *obj, bool enabled, lv_opa_t opa)
     case eDark:
         color = enabled ? lv_color_hex(0xffe0e0e0) : lv_color_hex(0xff606060);
         break;
-    case eNeon:
+    case eEarth:
         color = enabled ? lv_color_hex(0xffd4a76a) : lv_color_hex(0xff6b4e3d);
         break;
     case eGrey:
@@ -494,7 +494,7 @@ void Themes::recolorImage(lv_obj_t *obj, bool enabled)
     case eDark:
         color = enabled ? lv_color_hex(0xffe0e0e0) : lv_color_hex(0xff606060);
         break;
-    case eNeon:
+    case eEarth:
         color = enabled ? lv_color_hex(0xffe6b86e) : lv_color_hex(0xff6b4e3d);
         break;
     case eGrey:
@@ -528,7 +528,7 @@ void Themes::recolorText(lv_obj_t *obj, bool enabled)
     case eDark:
         color = enabled ? lv_color_hex(THEME(eHomeContainerText)) : lv_color_hex(0xff606060);
         break;
-    case eNeon:
+    case eEarth:
         color = enabled ? lv_color_hex(0xffe6b86e) : lv_color_hex(0xff8b7355);
         break;
     case eGrey:
@@ -562,7 +562,7 @@ void Themes::recolorTopLabel(lv_obj_t *obj, bool alert)
     case eDark:
         color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
         break;
-    case eNeon:
+    case eEarth:
         color = alert ? lv_color_hex(0xfff72b2b) : lv_color_hex(THEME(eTopPanelText));
         break;
     case eGrey:
