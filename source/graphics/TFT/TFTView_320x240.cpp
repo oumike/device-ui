@@ -241,7 +241,7 @@ bool TFTView_320x240::setupUIConfig(const meshtastic_DeviceUIConfig &uiconfig)
     Themes::recolorButton(objects.home_bell_button, false);
     Themes::recolorText(objects.home_bell_label, false);
 
-    lv_obj_set_style_bg_img_recolor(objects.home_button, colorMesh, LV_PART_MAIN | LV_STATE_DEFAULT);
+    Themes::recolorButton(objects.home_button, true);
 
     // set brightness
     if (displaydriver->hasLight())
@@ -458,13 +458,10 @@ void TFTView_320x240::ui_set_active(lv_obj_t *b, lv_obj_t *p, lv_obj_t *tp)
 {
     if (activeButton) {
         lv_obj_set_style_border_width(activeButton, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-        if (Themes::get() == Themes::eDark)
-            lv_obj_set_style_bg_img_recolor_opa(activeButton, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-        lv_obj_set_style_bg_img_recolor(activeButton, colorGray, LV_PART_MAIN | LV_STATE_DEFAULT);
+        Themes::recolorButton(activeButton, true);
     }
     lv_obj_set_style_border_width(b, 3, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor(b, colorMesh, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(b, 255, LV_PART_MAIN | LV_STATE_DEFAULT);
+    Themes::recolorButton(b, true);
 
     if (activePanel) {
         lv_obj_add_flag(activePanel, LV_OBJ_FLAG_HIDDEN);
@@ -675,13 +672,12 @@ void TFTView_320x240::updateTheme(void)
     Themes::recolorText(objects.home_sd_card_label, cardDetected);
     Themes::recolorText(objects.home_memory_label, (bool)objects.home_memory_button->user_data);
 
-    lv_opa_t opa = (Themes::get() == Themes::eDark) ? 0 : 255;
-    lv_obj_set_style_bg_img_recolor_opa(objects.home_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(objects.nodes_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(objects.groups_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(objects.messages_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(objects.map_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_img_recolor_opa(objects.settings_button, opa, LV_PART_MAIN | LV_STATE_DEFAULT);
+    Themes::recolorButton(objects.home_button, true);
+    Themes::recolorButton(objects.nodes_button, true);
+    Themes::recolorButton(objects.groups_button, true);
+    Themes::recolorButton(objects.messages_button, true);
+    Themes::recolorButton(objects.map_button, true);
+    Themes::recolorButton(objects.settings_button, true);
 
     for (int i = 0; i < c_max_channels; i++) {
         if (db.channel[i].role != meshtastic_Channel_Role_DISABLED)
@@ -4060,7 +4056,7 @@ void TFTView_320x240::ui_event_ok(lv_event_t *e)
                 THIS->setTheme(value);
                 THIS->db.uiConfig.theme = meshtastic_Theme(value);
                 THIS->controller->storeUIConfig(THIS->db.uiConfig);
-                lv_obj_set_style_bg_img_recolor(objects.settings_button, colorMesh, LV_PART_MAIN | LV_STATE_DEFAULT);
+                Themes::recolorButton(objects.settings_button, true);
             }
 
             lv_obj_add_flag(objects.settings_theme_panel, LV_OBJ_FLAG_HIDDEN);
