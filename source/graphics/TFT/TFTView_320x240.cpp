@@ -30,6 +30,7 @@
 #include <random>
 #include <sstream>
 #include <time.h>
+#include <vector>
 
 #if defined(ARCH_PORTDUINO)
 #include "PortduinoFS.h"
@@ -2461,24 +2462,9 @@ void TFTView_320x240::ui_event_nodesPanelScroll(lv_event_t *e)
 
     const lv_coord_t LOAD_DISTANCE = 300;
 
-    // Load more nodes when approaching bottom
-    if (lv_obj_get_scroll_bottom(panel) < LOAD_DISTANCE && self->nodesScrollDisplayLimit < MAX_NUM_NODES_VIEW &&
-        !self->nodesScrollLoadingMore) {
-
-        self->nodesScrollLoadingMore = true;
-
-        uint16_t new_limit = self->nodesScrollDisplayLimit + 15;
-        if (new_limit > MAX_NUM_NODES_VIEW) {
-            new_limit = MAX_NUM_NODES_VIEW;
-        }
-
-        self->nodesScrollDisplayLimit = new_limit;
-        self->updateNodesFiltered(false);
-
-        ILOG_DEBUG("Loaded nodes batch, now displaying %d nodes", self->nodesScrollDisplayLimit);
-
-        self->nodesScrollLoadingMore = false;
-    }
+    // Keep the virtual list window aligned with current scroll position.
+    // This deletes LVGL node panels outside the viewport buffer and recreates only what's needed.
+    self->refreshVirtualNodes(false);
 
     scroll_running = false;
 }
@@ -2658,36 +2644,38 @@ void TFTView_320x240::loadMap(void)
             sortedLat.reserve(nodeObjects.size());
             sortedLon.reserve(nodeObjects.size());
             for (auto it : nodeObjects) {
-                lv_obj_t *p = nodes[it.first];
-                int32_t lat = (long)p->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                int32_t lon = (long)p->LV_OBJ_IDX(node_pos2_idx)->user_data;
-                if (lat && lon) {
-                    sortedLat.push_back(lat);
-                    sortedLon.push_back(lon);
+                auto nd = nodeData.find(it.first);
+                if (nd != nodeData.end() && nd->second.hasPosition && nd->second.lat && nd->second.lon) {
+                    sortedLat.push_back(nd->second.lat);
+                    sortedLon.push_back(nd->second.lon);
                 }
             }
-            std::sort(sortedLat.begin(), sortedLat.end());
-            std::sort(sortedLon.begin(), sortedLon.end());
-            int64_t latcenter = 0;
-            int64_t loncenter = 0;
-            int32_t count = 0;
-            // select just the closest 60% of nodes, ignore the rest
-            int pp = 100 / 20;
-            for (int i = sortedLat.size() / pp; i < pp * sortedLat.size() / pp; i++) {
-                latcenter += sortedLat[i];
-                loncenter += sortedLon[i];
-                count++;
-            }
-            latcenter /= count;
-            loncenter /= count;
-            map->setHomeLocation(latcenter * 1e-7, loncenter * 1e-7);
+            if (!sortedLat.empty() && !sortedLon.empty()) {
+                std::sort(sortedLat.begin(), sortedLat.end());
+                std::sort(sortedLon.begin(), sortedLon.end());
+                int64_t latcenter = 0;
+                int64_t loncenter = 0;
+                int32_t count = 0;
+                // select just the closest 60% of nodes, ignore the rest
+                int pp = 100 / 20;
+                for (int i = sortedLat.size() / pp; i < pp * sortedLat.size() / pp; i++) {
+                    latcenter += sortedLat[i];
+                    loncenter += sortedLon[i];
+                    count++;
+                }
+                latcenter /= count;
+                loncenter /= count;
+                map->setHomeLocation(latcenter * 1e-7, loncenter * 1e-7);
 
-            // calculate optimal zoom factor to fit in all nodes of this range
-            lv_obj_update_layout(objects.raw_map_panel);
-            float rangeDeg = 1e-7 * (sortedLon[(pp - 1) * sortedLon.size() / pp] - sortedLon[sortedLon.size() / pp]);
-            float distanceKm = abs(rangeDeg * 111.32 * cos(1e-7 * sortedLat[sortedLat.size() / 2]));
-            uint32_t zoom = sqrt(156.543034f / distanceKm * abs(cos(1e-7 * sortedLat[sortedLat.size() / 2])) * 256) + 1;
-            map->setZoom(zoom);
+                // calculate optimal zoom factor to fit in all nodes of this range
+                lv_obj_update_layout(objects.raw_map_panel);
+                float rangeDeg = 1e-7 * (sortedLon[(pp - 1) * sortedLon.size() / pp] - sortedLon[sortedLon.size() / pp]);
+                float distanceKm = abs(rangeDeg * 111.32 * cos(1e-7 * sortedLat[sortedLat.size() / 2]));
+                uint32_t zoom = sqrt(156.543034f / distanceKm * abs(cos(1e-7 * sortedLat[sortedLat.size() / 2])) * 256) + 1;
+                map->setZoom(zoom);
+            } else {
+                map->setZoom(3);
+            }
         } else {
             // use default location @theBigBentern
             map->setZoom(3);
@@ -2701,9 +2689,9 @@ void TFTView_320x240::loadMap(void)
         // finally add all node images to the map
         if (!nodeObjects.empty()) {
             for (auto it : nodeObjects) {
-                lv_obj_t *p = nodes[it.first];
-                float lat = 1e-7 * (long)p->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                float lon = 1e-7 * (long)p->LV_OBJ_IDX(node_pos2_idx)->user_data;
+                auto nd = nodeData.find(it.first);
+                float lat = (nd != nodeData.end() && nd->second.hasPosition) ? 1e-7f * nd->second.lat : 0.0f;
+                float lon = (nd != nodeData.end() && nd->second.hasPosition) ? 1e-7f * nd->second.lon : 0.0f;
                 map->add(it.first, lat, lon, drawObjectCB);
                 lv_obj_add_flag(it.second, LV_OBJ_FLAG_CLICKABLE);
                 lv_obj_add_event_cb(it.second, ui_event_mapNodeButton, LV_EVENT_CLICKED, (void *)it.first);
@@ -2782,6 +2770,11 @@ void TFTView_320x240::updateLocationMap(uint32_t num)
  */
 void TFTView_320x240::addOrUpdateMap(uint32_t nodeNum, int32_t lat, int32_t lon)
 {
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.hasPosition = true;
+
     auto it = nodeObjects.find(nodeNum);
     if (it == nodeObjects.end()) {
         uint32_t bgColor, fgColor;
@@ -2825,6 +2818,7 @@ void TFTView_320x240::addOrUpdateMap(uint32_t nodeNum, int32_t lat, int32_t lon)
     } else {
         if (map) {
             map->update(it->first, lat * 1e-7, lon * 1e-7);
+            updateLocationMap(map->getObjectsOnMap());
         }
     }
 }
@@ -4868,12 +4862,29 @@ void TFTView_320x240::setDeviceMetaData(int hw_model, const char *version, bool 
 
 void TFTView_320x240::addOrUpdateNode(uint32_t nodeNum, uint8_t channel, uint32_t lastHeard, const meshtastic_User &cfg)
 {
+    // keep source-of-truth in nodeData
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.id = nodeNum;
+    rec.channel = channel;
+    rec.lastHeard = lastHeard;
+    rec.shortName = cfg.short_name;
+    rec.longName = cfg.long_name;
+    rec.role = (MeshtasticView::eRole)cfg.role;
+    rec.hasKey = cfg.public_key.size != 0;
+    rec.isUnmessagable = cfg.has_is_unmessagable && cfg.is_unmessagable;
+    rec.hasUser = true;
+
     if (nodes.find(nodeNum) == nodes.end()) {
         addNode(nodeNum, channel, cfg.short_name, cfg.long_name, lastHeard, (MeshtasticView::eRole)cfg.role,
                 cfg.public_key.size != 0, cfg.has_is_unmessagable && cfg.is_unmessagable);
     } else {
         updateNode(nodeNum, channel, cfg);
     }
+
+    // Debounce sorting to avoid resorting 200x per second when packets stream in.
+    nodesResortPending = true;
+    nextNodesResortMs = millis() + 150;
+    updateNodesStatus();
 }
 
 /**
@@ -4892,6 +4903,17 @@ void TFTView_320x240::addOrUpdateNode(uint32_t nodeNum, uint8_t channel, uint32_
 void TFTView_320x240::updateNode(uint32_t nodeNum, uint8_t ch, const meshtastic_User &cfg)
 {
     db.user = cfg;
+
+    // keep record in sync
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.channel = ch;
+    rec.shortName = cfg.short_name;
+    rec.longName = cfg.long_name;
+    rec.role = (MeshtasticView::eRole)cfg.role;
+    rec.hasKey = cfg.public_key.size != 0;
+    rec.isUnmessagable = cfg.has_is_unmessagable && cfg.is_unmessagable;
+    rec.hasUser = true;
+
     auto it = nodes.find(nodeNum);
     if (it != nodes.end() && it->second) {
         if (it->first == ownNode) {
@@ -4953,6 +4975,15 @@ void TFTView_320x240::updateNode(uint32_t nodeNum, uint8_t ch, const meshtastic_
 
 void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon, int32_t alt, uint32_t sats, uint32_t precision)
 {
+    // persist data first
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.alt = alt;
+    rec.sats = sats;
+    rec.precision = precision;
+    rec.hasPosition = lat != 0 || lon != 0;
+
     int32_t altU = abs(alt) < 10000 ? alt : 0;
     char units[3] = {};
     if (db.config.display.units == meshtastic_Config_DisplayConfig_DisplayUnits_METRIC) {
@@ -4993,14 +5024,9 @@ void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon,
             myLongitude = lon;
 
             // go through existing node list and update distance
-            // TODO: need incremental update!?
-            for (auto &it : nodes) {
-                if (it.first != ownNode) {
-                    int32_t nlat = (long)it.second->LV_OBJ_IDX(node_pos1_idx)->user_data;
-                    int32_t nlon = (long)it.second->LV_OBJ_IDX(node_pos2_idx)->user_data;
-                    if (nlat != 0 && nlon != 0) {
-                        updateDistance(it.first, nlat, nlon);
-                    }
+            for (auto &it : nodeData) {
+                if (it.first != ownNode && it.second.hasPosition) {
+                    updateDistance(it.first, it.second.lat, it.second.lon);
                 }
             }
             // update own location on map
@@ -5025,7 +5051,7 @@ void TFTView_320x240::updatePosition(uint32_t nodeNum, int32_t lat, int32_t lon,
             sprintf(buf, "%d%s MSL  %u sats", altU, units, sats);
         sprintf(buf, "%d%s MSL", altU, units);
         lv_label_set_text(panel->LV_OBJ_IDX(node_pos2_idx), buf);
-        // store lat/lon in user_data, because we need these values later to calculate the distance to us
+        // no longer depend on lvgl user_data for source-of-truth
         panel->LV_OBJ_IDX(node_pos1_idx)->user_data = (void *)lat;
         panel->LV_OBJ_IDX(node_pos2_idx)->user_data = (void *)lon;
         lv_obj_remove_flag(panel->LV_OBJ_IDX(node_pos1_idx), LV_OBJ_FLAG_HIDDEN);
@@ -5066,6 +5092,12 @@ void TFTView_320x240::updateDistance(uint32_t nodeNum, int32_t lat, int32_t lon)
     lv_obj_t *userShort = nodes[nodeNum]->LV_OBJ_IDX(node_lbs_idx);
     lv_label_set_text(userShort, buf);
     lv_obj_set_pos(userShort, 30, -1);
+
+    // persist distance source coords in data map as well
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.lat = lat;
+    rec.lon = lon;
+    rec.hasPosition = true;
 }
 
 /**
@@ -5079,6 +5111,12 @@ void TFTView_320x240::updateDistance(uint32_t nodeNum, int32_t lat, int32_t lon)
  */
 void TFTView_320x240::updateMetrics(uint32_t nodeNum, uint32_t bat_level, float voltage, float chUtil, float airUtil)
 {
+    auto &rec = getOrCreateNodeRecord(nodeNum);
+    rec.batLevel = bat_level;
+    rec.voltage = voltage;
+    rec.chUtil = chUtil;
+    rec.airUtil = airUtil;
+
     auto it = nodes.find(nodeNum);
     if (it != nodes.end()) {
         char buf[48];
@@ -5639,34 +5677,41 @@ void TFTView_320x240::purgeNode(uint32_t nodeNum)
  */
 bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
 {
-    lv_obj_t *panel = nodes[nodeNum];
+    auto itPanel = nodes.find(nodeNum);
+    if (itPanel == nodes.end() || itPanel->second == nullptr) {
+        return false;
+    }
+    lv_obj_t *panel = itPanel->second;
+    auto nd = nodeData.find(nodeNum);
+    const NodeRecord *rec = (nd != nodeData.end()) ? &nd->second : nullptr;
+
     bool hide = false;
     if (nodeNum != ownNode /* && filter.active*/) { // TODO
         if (lv_obj_has_state(objects.nodes_filter_unknown_switch, LV_STATE_CHECKED)) {
-            if (lv_img_get_src(panel->LV_OBJ_IDX(node_img_idx)) == &img_circle_question_image) {
+            if (rec && rec->hasUser == false) {
                 hide = true;
             }
         }
         if (lv_obj_has_state(objects.nodes_filter_offline_switch, LV_STATE_CHECKED)) {
-            time_t lastHeard = (time_t)panel->LV_OBJ_IDX(node_lh_idx)->user_data;
+            time_t lastHeard = rec ? rec->lastHeard : (time_t)panel->LV_OBJ_IDX(node_lh_idx)->user_data;
             if (lastHeard == 0 || curtime - lastHeard > secs_until_offline)
                 hide = true;
         }
         if (lv_obj_has_state(objects.nodes_filter_public_key_switch, LV_STATE_CHECKED)) {
-            bool hasKey = (unsigned long)panel->LV_OBJ_IDX(node_bat_idx)->user_data == 1;
+            bool hasKey = rec ? rec->hasKey : ((unsigned long)panel->LV_OBJ_IDX(node_bat_idx)->user_data == 1);
             if (!hasKey)
                 hide = true;
         }
         if (lv_dropdown_get_selected(objects.nodes_filter_channel_dropdown) != 0) {
             int selected = lv_dropdown_get_selected(objects.nodes_filter_channel_dropdown);
             if (selected != 0) {
-                uint8_t ch = (uint8_t)(unsigned long)panel->user_data;
+                uint8_t ch = rec ? rec->channel : (uint8_t)(unsigned long)panel->user_data;
                 if (selected - 1 != ch)
                     hide = true;
             }
         }
         if (lv_dropdown_get_selected(objects.nodes_filter_hops_dropdown) != 0) {
-            int32_t hopsAway = (signed long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
+            int32_t hopsAway = rec ? rec->hopsAway : (signed long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
             int selected = lv_dropdown_get_selected(objects.nodes_filter_hops_dropdown) - 7;
             if (hopsAway < 0)
                 hide = true;
@@ -5680,25 +5725,26 @@ bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
         }
 #if 0
         if (lv_obj_has_state(objects.nodes_filter_mqtt_switch, LV_STATE_CHECKED)) {
-            bool viaMqtt = false; // TODO (unsigned long)panel->LV_OBJ_IDX(node_sig_idx)->user_data;
+            bool viaMqtt = rec ? rec->viaMqtt : false; // TODO
             if (viaMqtt)
                 hide = true;
         }
 #endif
         if (lv_obj_has_state(objects.nodes_filter_position_switch, LV_STATE_CHECKED)) {
-            if (lv_label_get_text(panel->LV_OBJ_IDX(node_pos1_idx))[0] == '\0')
+            bool hasPos = rec ? rec->hasPosition : lv_label_get_text(panel->LV_OBJ_IDX(node_pos1_idx))[0] != '\0';
+            if (!hasPos)
                 hide = true;
         }
         const char *name = lv_textarea_get_text(objects.nodes_filter_name_area);
         if (name[0] != '\0') {
+            const char *longName = rec ? rec->longName.c_str() : lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx));
+            const char *shortName = rec ? rec->shortName.c_str() : lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx));
             if (name[0] != '!') { // use '!' char to negate search result
-                if (!strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx)), name) &&
-                    !strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx)), name)) {
+                if (!strcasestr(longName, name) && !strcasestr(shortName, name)) {
                     hide = true;
                 }
             } else {
-                if (strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbl_idx)), &name[1]) ||
-                    strcasestr(lv_label_get_text(panel->LV_OBJ_IDX(node_lbs_idx)), &name[1])) {
+                if (strcasestr(longName, &name[1]) || strcasestr(shortName, &name[1])) {
                     hide = true;
                 }
             }
@@ -5785,6 +5831,197 @@ bool TFTView_320x240::applyNodesFilter(uint32_t nodeNum, bool reset)
         lv_obj_set_style_border_width(panel, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     }
     return hide; // TODO || filter.active;
+}
+
+void TFTView_320x240::rebuildNodesFromData()
+{
+    // create missing panels from data map; keep existing ones
+    for (auto &kv : nodeData) {
+        uint32_t nodeNum = kv.first;
+        NodeRecord &rec = kv.second;
+        if (nodes.find(nodeNum) != nodes.end())
+            continue;
+
+        // fallback defaults
+        const char *shortName = rec.shortName.empty() ? "" : rec.shortName.c_str();
+        const char *longName = rec.longName.empty() ? "" : rec.longName.c_str();
+        char shortBuf[8] = {};
+        char longBuf[32] = {};
+        if (!shortName[0]) {
+            sprintf(shortBuf, "%04x", nodeNum & 0xffff);
+            shortName = shortBuf;
+        }
+        if (!longName[0]) {
+            snprintf(longBuf, sizeof(longBuf), "Node %s", shortName);
+            longName = longBuf;
+        }
+
+        addNode(nodeNum, rec.channel, shortName, longName, rec.lastHeard, rec.role, rec.hasKey, rec.isUnmessagable);
+    }
+    nodesChanged = true;
+}
+
+void TFTView_320x240::reorderNodesFromData()
+{
+    // Keep the data model up to date.
+    rebuildNodesFromData();
+
+    // Bump version so the virtual list knows order changed.
+    nodesOrderVersion++;
+
+    // If we're using virtualization, we don't keep one LVGL panel per node anymore.
+    // Just refresh visible rows.
+    refreshVirtualNodes(true);
+
+    nodesChanged = true;
+}
+
+/**
+ * @brief Virtualized nodes list:
+ * - Keeps scroll length using top/bottom spacer objects
+ * - Only materializes a small window of node panels around the viewport
+ * - Rebuilds visible rows quickly when sort order changes (instant lastHeard sorting)
+ */
+void TFTView_320x240::refreshVirtualNodes(bool force)
+{
+    if (!objects.nodes_panel)
+        return;
+
+    // Ensure spacers exist
+    if (!nodesSpacerTop) {
+        nodesSpacerTop = lv_obj_create(objects.nodes_panel);
+        lv_obj_set_width(nodesSpacerTop, LV_PCT(100));
+        lv_obj_set_height(nodesSpacerTop, 0);
+        lv_obj_clear_flag(nodesSpacerTop, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(nodesSpacerTop, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+    if (!nodesSpacerBottom) {
+        nodesSpacerBottom = lv_obj_create(objects.nodes_panel);
+        lv_obj_set_width(nodesSpacerBottom, LV_PCT(100));
+        lv_obj_set_height(nodesSpacerBottom, 0);
+        lv_obj_clear_flag(nodesSpacerBottom, LV_OBJ_FLAG_CLICKABLE);
+        lv_obj_set_style_bg_opa(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_border_width(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_pad_all(nodesSpacerBottom, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
+    }
+
+    // Build ordered list (instant last-heard sorting)
+    std::vector<uint32_t> order;
+    order.reserve(nodeData.size());
+    for (auto &kv : nodeData) {
+        order.push_back(kv.first);
+    }
+    std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) {
+        if (a == ownNode && b != ownNode)
+            return true;
+        if (b == ownNode && a != ownNode)
+            return false;
+        const auto &ra = nodeData.at(a);
+        const auto &rb = nodeData.at(b);
+        if (ra.lastHeard != rb.lastHeard)
+            return ra.lastHeard > rb.lastHeard;
+        return a < b;
+    });
+
+    // Determine viewport window
+    lv_coord_t scroll_y = lv_obj_get_scroll_y(objects.nodes_panel);
+    if (scroll_y < 0)
+        scroll_y = -scroll_y;
+    int firstVisible = (nodesRowHeight > 0) ? (scroll_y / nodesRowHeight) : 0;
+    int total = (int)order.size();
+
+    int wantFirst = std::max(0, firstVisible - (int)nodesVirtualBuffer);
+    int wantLast = std::min(total - 1, wantFirst + (int)nodesVirtualWindow - 1);
+    if (wantLast < wantFirst)
+        wantLast = wantFirst;
+
+    // Update spacer sizes to preserve full scroll height
+    lv_obj_set_height(nodesSpacerTop, wantFirst * nodesRowHeight);
+    int bottomCount = std::max(0, total - (wantLast + 1));
+    lv_obj_set_height(nodesSpacerBottom, bottomCount * nodesRowHeight);
+
+    // If forcing, drop all existing materialized node panels
+    if (force) {
+        for (auto &kv : nodes) {
+            if (kv.second)
+                lv_obj_delete(kv.second);
+        }
+        nodes.clear();
+        nodeCount = 0;
+    }
+
+    // Materialize needed nodes, delete those outside window
+    std::set<uint32_t> needed;
+    for (int i = wantFirst; i <= wantLast && i < total; i++) {
+        needed.insert(order[i]);
+    }
+
+    // Delete panels that are not needed
+    for (auto it = nodes.begin(); it != nodes.end();) {
+        if (needed.find(it->first) == needed.end()) {
+            lv_obj_delete(it->second);
+            it = nodes.erase(it);
+            if (nodeCount > 0)
+                nodeCount--;
+        } else {
+            ++it;
+        }
+    }
+
+    // Ensure needed panels exist (insert between spacers)
+    // Move top spacer to index 0, bottom to end
+    lv_obj_move_to_index(nodesSpacerTop, 0);
+    lv_obj_move_to_index(nodesSpacerBottom, objects.nodes_panel->spec_attr->child_cnt - 1);
+
+    int insertIdx = 1;
+    for (int i = wantFirst; i <= wantLast && i < total; i++) {
+        uint32_t nodeNum = order[i];
+        if (nodes.find(nodeNum) == nodes.end()) {
+            auto nd = nodeData.find(nodeNum);
+            if (nd == nodeData.end())
+                continue;
+            NodeRecord &rec = nd->second;
+
+            // Fallbacks
+            const char *shortName = rec.shortName.empty() ? "" : rec.shortName.c_str();
+            const char *longName = rec.longName.empty() ? "" : rec.longName.c_str();
+            char shortBuf[8] = {};
+            char longBuf[32] = {};
+            if (!shortName[0]) {
+                sprintf(shortBuf, "%04x", nodeNum & 0xffff);
+                shortName = shortBuf;
+            }
+            if (!longName[0]) {
+                snprintf(longBuf, sizeof(longBuf), "Node %s", shortName);
+                longName = longBuf;
+            }
+
+            addNode(nodeNum, rec.channel, shortName, longName, rec.lastHeard, rec.role, rec.hasKey, rec.isUnmessagable);
+        }
+
+        // Place the node panel between spacers in sorted order
+        auto it = nodes.find(nodeNum);
+        if (it != nodes.end()) {
+            lv_obj_move_to_index(it->second, insertIdx);
+
+            // Update only if changed (avoid LVGL churn)
+            auto nd = nodeData.find(nodeNum);
+            if (nd != nodeData.end()) {
+                NodeRecord &rec = nd->second;
+                uint32_t currentLH = (unsigned long)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+                if (rec.lastHeard != 0 && rec.lastHeard != currentLH) {
+                    it->second->LV_OBJ_IDX(node_lh_idx)->user_data = (void *)(unsigned long)rec.lastHeard;
+                    char buf[32];
+                    lastHeardToString((time_t)rec.lastHeard, buf);
+                    lv_label_set_text(it->second->LV_OBJ_IDX(node_lh_idx), buf);
+                }
+            }
+
+            insertIdx++;
+        }
+    }
 }
 
 void TFTView_320x240::messageAlert(const char *alert, bool show)
@@ -7099,7 +7336,11 @@ void TFTView_320x240::removeNode(uint32_t nodeNum)
 {
     auto it = nodes.find(nodeNum);
     if (it != nodes.end()) {
+        lv_obj_del(it->second);
+        nodes.erase(it);
     }
+    removeFromMap(nodeNum);
+    nodeData.erase(nodeNum);
 }
 
 void TFTView_320x240::setNodeImage(uint32_t nodeNum, eRole role, bool unmessagable, lv_obj_t *img)
@@ -7174,59 +7415,63 @@ void TFTView_320x240::updateNodesStatus(void)
  */
 void TFTView_320x240::updateNodesFiltered(bool reset)
 {
-    static auto it = nodes.begin();
+    static std::vector<uint32_t> nodeOrder;
+    static size_t idx = 0;
     static uint16_t processedCount = 0; // Track how many nodes we've processed in current session
 
     if (reset || nodesChanged) {
+        nodeOrder.clear();
+        nodeOrder.reserve(nodes.size());
+        for (const auto &kv : nodes) {
+            if (kv.second) {
+                nodeOrder.push_back(kv.first);
+            }
+        }
+        idx = 0;
+        processedCount = 0;
         nodesFiltered = 0;
         nodesChanged = false;
         processingFilter = true;
-        it = nodes.begin();
-        processedCount = 0;
     }
 
     // Process nodes in batches of 10, but respect the display limit for infinite scroll
     uint16_t batchSize = 10;
     uint16_t processLimit = nodesScrollDisplayLimit; // Limit based on infinite scroll display count
 
-    for (int i = 0; i < batchSize && it != nodes.end() && processedCount < processLimit; i++) {
-        applyNodesFilter(it->first, true);
-        it++;
+    int processed = 0;
+    while (idx < nodeOrder.size() && processed < batchSize && processedCount < processLimit) {
+        applyNodesFilter(nodeOrder[idx], true);
+        idx++;
+        processed++;
         processedCount++;
     }
 
-    if (it == nodes.end() || processedCount >= processLimit) {
+    if (idx >= nodeOrder.size() || processedCount >= processLimit) {
         processingFilter = false;
     }
     updateNodesStatus();
 }
 
-/**
- * @brief Update last heard display/user_data/counter to current time
- *
- * @param nodeNum
- */
 void TFTView_320x240::updateLastHeard(uint32_t nodeNum)
 {
     auto it = nodes.find(nodeNum);
     if (it != nodes.end() && it->second) {
-        time_t lastHeard = (time_t)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+        auto &rec = getOrCreateNodeRecord(nodeNum);
+        time_t prevLastHeard = rec.lastHeard ? rec.lastHeard : (time_t)it->second->LV_OBJ_IDX(node_lh_idx)->user_data;
+        rec.lastHeard = curtime;
+
         it->second->LV_OBJ_IDX(node_lh_idx)->user_data = (void *)curtime;
         lv_label_set_text(it->second->LV_OBJ_IDX(node_lh_idx), _("now"));
         if (it->first != ownNode) {
-            if (lastHeard > 0 && curtime - lastHeard >= secs_until_offline) {
+            if (prevLastHeard > 0 && curtime - prevLastHeard >= secs_until_offline) {
                 nodesOnline++;
                 applyNodesFilter(nodeNum);
                 updateNodesStatus();
             }
-            // move to top position
-            lv_obj_move_to_index(it->second, 1);
-
-            // re-arrange the group linked list i.e. move the node after the top position
-            lv_ll_t *lv_group_ll = &lv_group_get_default()->obj_ll;
-            void *act = it->second->LV_OBJ_IDX(node_btn_idx)->user_data;
-            if (lv_group_ll && act)
-                _lv_ll_move_before(lv_group_ll, act, _lv_ll_get_next(lv_group_ll, topNodeLL));
+            // With virtualized nodes list we don't "move to top" directly.
+            // Debounce a resort instead.
+            nodesResortPending = true;
+            nextNodesResortMs = millis() + 150;
         }
     }
 }
@@ -7513,6 +7758,21 @@ void TFTView_320x240::task_handler(void)
                 }
             }
         }
+        // Nodes page performance:
+        // (1) debounce resort to avoid full re-sort on every incoming packet
+        // (2) refresh visible rows on a short cycle (only visible LVGL objects)
+        if (activePanel == objects.nodes_panel) {
+            uint32_t nowMs = millis();
+            if (nodesResortPending && nowMs >= nextNodesResortMs) {
+                nodesResortPending = false;
+                reorderNodesFromData();
+            }
+            if (nowMs >= nextNodesUIRefreshMs) {
+                nextNodesUIRefreshMs = nowMs + 200;
+                refreshVirtualNodes(false);
+            }
+        }
+
         if (processingFilter || nodesChanged) {
             updateNodesFiltered(nodesChanged);
         }
