@@ -1249,7 +1249,8 @@ void TFTView_320x240::ui_event_ChatButton(lv_event_t *e)
             }
         }
 
-        lv_obj_set_style_border_color(target, colorMidGray, LV_PART_MAIN | LV_STATE_DEFAULT);
+        // Clear unread highlight while keeping border colors controlled by the active theme style.
+        lv_obj_set_style_outline_width(target, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
 
         uint32_t channelOrNode = (unsigned long)e->user_data;
         if (channelOrNode < c_max_channels) {
@@ -6689,7 +6690,6 @@ void TFTView_320x240::addChat(uint32_t from, uint32_t to, uint8_t ch)
     lv_obj_clear_flag(chatBtn, LV_OBJ_FLAG_SCROLLABLE);
     add_style_home_button_style(chatBtn);
     lv_obj_set_style_align(chatBtn, LV_ALIGN_TOP_MID, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_border_color(chatBtn, colorMidGray, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_border_width(chatBtn, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_ofs_x(chatBtn, 1, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_shadow_ofs_y(chatBtn, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -6700,7 +6700,6 @@ void TFTView_320x240::addChat(uint32_t from, uint32_t to, uint8_t ch)
     lv_obj_set_style_pad_bottom(chatBtn, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_row(chatBtn, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_set_style_pad_column(chatBtn, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
-    lv_obj_set_style_bg_color(chatBtn, lv_color_hex(0xff141723), LV_PART_MAIN | LV_STATE_DEFAULT);
     lv_obj_move_to_index(chatBtn, 0);
 
     char buf[64];
@@ -6769,8 +6768,10 @@ void TFTView_320x240::highlightChat(uint32_t from, uint32_t to, uint8_t ch)
     uint32_t index = ((to == UINT32_MAX || from == 0) ? ch : from);
     auto it = chats.find(index);
     if (it != chats.end()) {
-        // mark chat in color
-        lv_obj_set_style_border_color(it->second, colorOrange, LV_PART_MAIN | LV_STATE_DEFAULT);
+        // Mark unread chats with an outline so theme-defined border colors stay intact.
+        lv_obj_set_style_outline_color(it->second, colorOrange, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_outline_width(it->second, 2, LV_PART_MAIN | LV_STATE_DEFAULT);
+        lv_obj_set_style_outline_pad(it->second, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
     }
 }
 
